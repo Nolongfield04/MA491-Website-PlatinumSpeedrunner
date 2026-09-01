@@ -173,4 +173,4 @@ function getDvpRank(rankings, espnProTeamAbbr, position) {
   return { rank: entry.rank, avgAllowed: Math.round(entry.avgAllowed * 10) / 10, outOf: list.length };
 }
 
-module.exports = { getDefenseRankings, getDvpRank };
+module.exports = { getDefenseRankings, getDvpRank, fetchSeasonStats };

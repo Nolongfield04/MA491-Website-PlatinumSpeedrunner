@@ -5,6 +5,7 @@ const { getDefenseRankings } = require("./lib/defense.js");
 const { getUnitHealth } = require("./lib/injuries.js");
 const { getPlayerNews } = require("./lib/news.js");
 const { getAllWeeks } = require("./lib/history.js");
+const { getOpportunityTrend } = require("./lib/trends.js");
 const { buildAnalysis } = require("./lib/lineup.js");
 
 // News/injuries/history are enrichments layered on top of the core roster +
@@ -51,14 +52,15 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { week, season, roster, rosterSlots, teamName } = await getLeagueRosterAndSettings(cfg);
-    const [freeAgents, opponents, defense, unitHealth, news, weeksHistory] = await Promise.all([
+    const { week, season, roster, rosterSlots, teamName, opponent } = await getLeagueRosterAndSettings(cfg);
+    const [freeAgents, opponents, defense, unitHealth, news, weeksHistory, opportunityTrends] = await Promise.all([
       getFreeAgents(cfg, week),
       getWeekOpponents(week, season),
       getDefenseRankings(Number(season)),
       bestEffort(getUnitHealth(), {}, "unit injury health"),
       bestEffort(getPlayerNews(roster), [], "player news"),
       bestEffort(getAllWeeks(), [], "weekly history"),
+      bestEffort(getOpportunityTrend(roster, Number(season)), {}, "opportunity trend"),
     ]);
 
     const analysis = buildAnalysis({
@@ -72,6 +74,8 @@ exports.handler = async (event) => {
       unitHealth,
       weeksHistory,
       news,
+      opponent,
+      opportunityTrends,
     });
 
     return jsonResponse(200, { teamName, ...analysis, generatedAt: new Date().toISOString() });

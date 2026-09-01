@@ -111,6 +111,25 @@ function round1(n) {
   return Math.round(n * 10) / 10;
 }
 
+// Returns null when there's no opponent this week — either no schedule entry
+// yet, or (a real case, seen live with an 11-team league) a bye built into
+// the fantasy schedule itself, distinct from an NFL bye week.
+function getWeekMatchup(data, myTeamId, week) {
+  const matchup = (data.schedule || []).find(
+    (m) => m.matchupPeriodId === week && (m.home?.teamId === myTeamId || m.away?.teamId === myTeamId)
+  );
+  if (!matchup) return null;
+  const oppSide = matchup.home?.teamId === myTeamId ? matchup.away : matchup.home;
+  if (!oppSide) return null;
+  const oppTeam = (data.teams || []).find((t) => t.id === oppSide.teamId);
+  if (!oppTeam) return null;
+  return {
+    teamId: oppTeam.id,
+    teamName: oppTeam.name,
+    roster: (oppTeam.roster?.entries || []).map((entry) => normalizePlayer(entry, week)),
+  };
+}
+
 async function getLeagueRosterAndSettings(cfg) {
   const data = await espnFetch(
     `?view=mRoster&view=mTeam&view=mSettings&view=mMatchup&view=mMatchupScore`,
@@ -134,7 +153,9 @@ async function getLeagueRosterAndSettings(cfg) {
     }
   }
 
-  return { week, season: cfg.season, roster, rosterSlots, teamName: team.name };
+  const opponent = getWeekMatchup(data, team.id, week);
+
+  return { week, season: cfg.season, roster, rosterSlots, teamName: team.name, opponent };
 }
 
 async function getFreeAgents(cfg, week) {
@@ -157,4 +178,5 @@ module.exports = {
   positionName,
   proTeamAbbr,
   getStatsForWeek,
+  getWeekMatchup,
 };

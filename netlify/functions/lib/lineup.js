@@ -10,6 +10,37 @@ const SECONDARY_RELEVANCE = { QB: 0.3, WR: 1.0, TE: 0.7, RB: 0.05, K: 0, DST: 0 
 const OWN_OL_RELEVANCE = { QB: 0.5, RB: 1.0, WR: 0.2, TE: 0.2, K: 0, DST: 0 };
 const MAX_UNIT_NUDGE = 0.08; // cap any single unit's effect on adjustedProjection at +/-8%
 
+// Vegas implied team total is one of the strongest real signals for fantasy
+// output — a team implied for 27 points offers a fundamentally better
+// offensive environment than one implied for 15. Offensive positions scale
+// with their OWN team's implied total; DST scales inversely with the
+// OPPONENT's (a low-scoring opponent is a good matchup for a defense).
+const VEGAS_BASELINE = 22; // a roughly average team implied total
+// a team 10+ implied points above/below baseline maxes out the signal
+const VEGAS_SWING = 10;
+const VEGAS_RELEVANCE = { QB: 0.5, RB: 0.35, WR: 0.45, TE: 0.35, K: 0.25, DST: 0.5 };
+const MAX_VEGAS_NUDGE = 0.15; // cap at full relevance + max swing
+
+function vegasNudge(position, ownImplied, oppImplied) {
+  const relevant = position === "DST" ? oppImplied : ownImplied;
+  if (relevant == null) return { multiplier: 0, note: null };
+
+  // for DST, a LOW opponent implied total is favorable, so flip the sign
+  const rawDelta = position === "DST" ? VEGAS_BASELINE - relevant : relevant - VEGAS_BASELINE;
+  const normalizedDelta = Math.max(-1, Math.min(1, rawDelta / VEGAS_SWING));
+  const multiplier = normalizedDelta * (VEGAS_RELEVANCE[position] || 0) * MAX_VEGAS_NUDGE;
+
+  let note = null;
+  if (position === "DST") {
+    if (relevant <= VEGAS_BASELINE - 4) note = `favorable matchup — opponent implied for only ${relevant} pts`;
+    else if (relevant >= VEGAS_BASELINE + 4) note = `tough matchup — opponent implied for ${relevant} pts`;
+  } else {
+    if (relevant >= VEGAS_BASELINE + 5) note = `high-scoring game environment (${relevant} implied pts)`;
+    else if (relevant <= VEGAS_BASELINE - 5) note = `low-scoring game environment (${relevant} implied pts)`;
+  }
+  return { multiplier, note };
+}
+
 // Real, named factors only — this is a heuristic 0-100 score, not a
 // calibrated probability. Always presented in the UI as a labeled estimate.
 function unitHealthNudge(position, ownHealth, oppHealth) {
@@ -89,7 +120,7 @@ function injuryAdjustment(injuryStatus) {
   }
 }
 
-function scorePlayer(player, opponents, rankings, unitHealth, weeksHistory) {
+function scorePlayer(player, opponents, rankings, unitHealth, weeksHistory, opportunityTrends) {
   const opp = opponents[player.proTeam];
   const dvp = opp ? getDvpRank(rankings, opp.opponent, player.position) : null;
   const { multiplier: matchupMult, note: matchupNote } = matchupMultiplier(dvp);
@@ -99,9 +130,13 @@ function scorePlayer(player, opponents, rankings, unitHealth, weeksHistory) {
   const oppHealth = opp ? unitHealth?.[opp.opponent] : null;
   const unitNudge = opp ? unitHealthNudge(player.position, ownHealth, oppHealth) : 0;
 
+  const { multiplier: vegasMult, note: vegasNote } = opp
+    ? vegasNudge(player.position, opp.impliedTotal, opponents[opp.opponent]?.impliedTotal)
+    : { multiplier: 0, note: null };
+
   const base = player.projectedPoints ?? 0;
   const adjustedProjection = opp
-    ? Math.round(base * matchupMult * injuryMult * (1 + unitNudge) * 10) / 10
+    ? Math.round(base * matchupMult * injuryMult * (1 + unitNudge + vegasMult) * 10) / 10
     : Math.round(base * injuryMult * 10) / 10; // bye week: no matchup data
 
   const playerHistory = weeksHistory ? playerHistoryFromWeeks(weeksHistory, player.id) : null;
@@ -119,11 +154,14 @@ function scorePlayer(player, opponents, rankings, unitHealth, weeksHistory) {
     isHome: opp ? opp.isHome : null,
     dvpRank: dvp,
     matchupNote,
+    vegasNote,
+    impliedTotal: opp ? opp.impliedTotal : null,
     injuryFlag,
     adjustedProjection,
     onBye: !opp,
     confidence,
     history: playerHistory,
+    opportunityTrend: opportunityTrends?.[player.id] || null,
   };
 }
 
@@ -242,8 +280,19 @@ function suggestWaivers(scoredRoster, scoredFreeAgents, bench) {
   return suggestions;
 }
 
-function buildKeyTakeaways({ scoredRoster, lineupChanges, waiverSuggestions, week }) {
+function buildKeyTakeaways({ scoredRoster, lineupChanges, waiverSuggestions, week, weeklyMatchup }) {
   const takeaways = [];
+
+  if (weeklyMatchup && !weeklyMatchup.bye) {
+    const favored = weeklyMatchup.winProbability >= 50;
+    takeaways.push(
+      `Projected ${favored ? "favored" : "underdog"} vs ${weeklyMatchup.opponentTeamName} this week: ` +
+        `${weeklyMatchup.myProjectedTotal} to ${weeklyMatchup.opponentProjectedTotal} ` +
+        `(${weeklyMatchup.winProbability}% win probability, heuristic estimate).`
+    );
+  } else if (weeklyMatchup?.bye) {
+    takeaways.push("You have a bye in the fantasy schedule this week — no head-to-head matchup.");
+  }
 
   const bestMatchup = [...scoredRoster]
     .filter((p) => p.matchupNote?.includes("great"))
@@ -290,6 +339,43 @@ function buildKeyTakeaways({ scoredRoster, lineupChanges, waiverSuggestions, wee
   return takeaways;
 }
 
+// Runs the same scoring + optimal-lineup pipeline on an opponent's roster —
+// the DVP/Vegas/unit-health/history inputs are league-wide, not
+// team-specific, so this is a fair apples-to-apples projection.
+function projectOpponent(opponentRoster, rosterSlots, opponents, rankings, unitHealth, weeksHistory) {
+  const scored = opponentRoster.map((p) => scorePlayer(p, opponents, rankings, unitHealth, weeksHistory));
+  const { lineup } = buildOptimalLineup(scored, rosterSlots);
+  const total = round1(
+    lineup.reduce((sum, l) => sum + (l.player ? l.player.adjustedProjection : 0), 0)
+  );
+  return { lineup, total };
+}
+
+// Standard normal CDF via the Abramowitz-Stegun erf approximation — no
+// dependency needed for a one-off use.
+function normalCdf(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989423 * Math.exp((-z * z) / 2);
+  let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  if (z > 0) p = 1 - p;
+  return p;
+}
+
+// A documented heuristic, not a calibrated model: assumes a combined
+// week-to-week standard deviation of ~25 points across both teams, which is
+// a commonly cited rough figure for full fantasy team scores. Clamped so it
+// never claims false certainty at the tails.
+const COMBINED_WEEKLY_STDEV = 25;
+function computeWinProbability(myTotal, oppTotal) {
+  const diff = myTotal - oppTotal;
+  const raw = normalCdf(diff / COMBINED_WEEKLY_STDEV) * 100;
+  return Math.round(Math.max(3, Math.min(97, raw)));
+}
+
+function round1(n) {
+  return Math.round(n * 10) / 10;
+}
+
 function buildAnalysis({
   roster,
   freeAgents,
@@ -301,20 +387,46 @@ function buildAnalysis({
   unitHealth,
   weeksHistory,
   news,
+  opponent,
+  opportunityTrends,
 }) {
-  const scoredRoster = roster.map((p) => scorePlayer(p, opponents, rankings, unitHealth, weeksHistory));
+  const scoredRoster = roster.map((p) =>
+    scorePlayer(p, opponents, rankings, unitHealth, weeksHistory, opportunityTrends)
+  );
   const scoredFreeAgents = freeAgents.map((p) => scorePlayer(p, opponents, rankings, unitHealth, weeksHistory));
 
   const optimalLineup = buildOptimalLineup(scoredRoster, rosterSlots);
   const startersNow = currentStarters(scoredRoster);
   const lineupChanges = diffLineup(optimalLineup, startersNow);
   const waiverSuggestions = suggestWaivers(scoredRoster, scoredFreeAgents, optimalLineup.bench);
-  const keyTakeaways = buildKeyTakeaways({ scoredRoster, lineupChanges, waiverSuggestions, week });
+
+  const myProjectedTotal = round1(
+    optimalLineup.lineup.reduce((sum, l) => sum + (l.player ? l.player.adjustedProjection : 0), 0)
+  );
+
+  let weeklyMatchup = { bye: true };
+  if (opponent) {
+    const oppProjection = projectOpponent(opponent.roster, rosterSlots, opponents, rankings, unitHealth, weeksHistory);
+    weeklyMatchup = {
+      bye: false,
+      opponentTeamName: opponent.teamName,
+      myProjectedTotal,
+      opponentProjectedTotal: oppProjection.total,
+      winProbability: computeWinProbability(myProjectedTotal, oppProjection.total),
+      opponentLineup: oppProjection.lineup.map((l) => ({
+        slot: l.slot,
+        player: l.player ? { name: l.player.name, position: l.player.position, adjustedProjection: l.player.adjustedProjection } : null,
+      })),
+    };
+  }
+
+  const keyTakeaways = buildKeyTakeaways({ scoredRoster, lineupChanges, waiverSuggestions, week, weeklyMatchup });
 
   return {
     week,
     defenseDataSource: defenseSource,
     news: news || [],
+    weeklyMatchup,
     keyTakeaways,
     startingLineup: optimalLineup.lineup.map((l) => ({
       slot: l.slot,
@@ -326,6 +438,7 @@ function buildAnalysis({
             adjustedProjection: l.player.adjustedProjection,
             projectedPoints: l.player.projectedPoints,
             matchupNote: l.player.matchupNote,
+            vegasNote: l.player.vegasNote,
             injuryFlag: l.player.injuryFlag,
             confidence: l.player.confidence,
           }
@@ -357,12 +470,15 @@ function summarizePlayer(p) {
     adjustedProjection: p.adjustedProjection,
     dvpRank: p.dvpRank,
     matchupNote: p.matchupNote,
+    vegasNote: p.vegasNote,
+    impliedTotal: p.impliedTotal,
     injuryStatus: p.injuryStatus,
     injuryFlag: p.injuryFlag,
     percentOwned: p.percentOwned,
     percentStarted: p.percentStarted,
     confidence: p.confidence,
     history: p.history,
+    opportunityTrend: p.opportunityTrend || null,
   };
 }
 
