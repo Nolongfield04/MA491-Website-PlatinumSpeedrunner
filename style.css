@@ -183,6 +183,30 @@ footer {
   font-style: italic;
 }
 
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.hero-photo {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+}
+
+.hero h1 {
+  margin-bottom: 0.25rem;
+}
+
+.hero .subtitle {
+  margin: 0;
+}
+
 .gallery {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -195,6 +219,18 @@ footer {
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid var(--border);
+  display: block;
+}
+
+.gallery-item {
+  margin: 0;
+}
+
+.gallery-item figcaption {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  text-align: center;
 }
 
 .edu-header {
@@ -213,16 +249,6 @@ footer {
 
 .placeholder-img {
   opacity: 0.35;
-}
-
-.gallery-item {
-  height: 200px;
-  border-radius: 8px;
-  border: 1px dashed var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-alt);
 }
 
 @media (max-width: 600px) {
