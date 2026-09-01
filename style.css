@@ -197,6 +197,24 @@ footer {
   border: 1px solid var(--border);
 }
 
+.edu-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.crest {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.placeholder-img {
+  opacity: 0.35;
+}
+
 .gallery-item {
   height: 200px;
   border-radius: 8px;
