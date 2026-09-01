@@ -21,9 +21,10 @@ async function getWeekOpponents(week, season) {
 
     // odds[0].spread/overUnder are relative to the HOME team regardless of
     // competitor array order — resolve which entry is home before computing
-    // implied totals.
+    // implied totals and each team's OWN spread (negative = favored).
     const odds = competition.odds?.[0];
     let impliedByAbbr = {};
+    let ownSpreadByAbbr = {};
     if (odds && typeof odds.overUnder === "number" && typeof odds.spread === "number") {
       const home = a.homeAway === "home" ? a : b;
       const away = home === a ? b : a;
@@ -33,6 +34,10 @@ async function getWeekOpponents(week, season) {
         [home.team.abbreviation]: homeImplied,
         [away.team.abbreviation]: awayImplied,
       };
+      ownSpreadByAbbr = {
+        [home.team.abbreviation]: odds.spread,
+        [away.team.abbreviation]: -odds.spread,
+      };
     }
 
     opponents[abbrA] = {
@@ -40,14 +45,16 @@ async function getWeekOpponents(week, season) {
       isHome: a.homeAway === "home",
       impliedTotal: impliedByAbbr[abbrA] ?? null,
       overUnder: odds?.overUnder ?? null,
-      spread: odds?.spread ?? null,
+      spread: ownSpreadByAbbr[abbrA] ?? null,
+      kickoffTime: event.date || null,
     };
     opponents[abbrB] = {
       opponent: abbrA,
       isHome: b.homeAway === "home",
       impliedTotal: impliedByAbbr[abbrB] ?? null,
       overUnder: odds?.overUnder ?? null,
-      spread: odds?.spread ?? null,
+      spread: ownSpreadByAbbr[abbrB] ?? null,
+      kickoffTime: event.date || null,
     };
   }
   return opponents; // { TEAM_ABBR: { opponent, isHome, impliedTotal, overUnder, spread } }, teams on bye are absent

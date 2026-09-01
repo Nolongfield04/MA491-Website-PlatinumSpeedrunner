@@ -6,6 +6,8 @@ const { getUnitHealth } = require("./lib/injuries.js");
 const { getPlayerNews } = require("./lib/news.js");
 const { getAllWeeks } = require("./lib/history.js");
 const { getOpportunityTrend } = require("./lib/trends.js");
+const { getSnapShareTrend } = require("./lib/snapshare.js");
+const { getWeatherForTeams } = require("./lib/weather.js");
 const { buildAnalysis } = require("./lib/lineup.js");
 
 // News/injuries/history are enrichments layered on top of the core roster +
@@ -63,6 +65,15 @@ exports.handler = async (event) => {
       bestEffort(getOpportunityTrend(roster, Number(season)), {}, "opportunity trend"),
     ]);
 
+    // weather depends on `opponents` already being resolved (need kickoff
+    // times + who's playing whom), so it's a second wave rather than folded
+    // into the batch above.
+    const teamsInPlay = [...new Set(roster.map((p) => p.proTeam))].flatMap((t) => [t, opponents[t]?.opponent]).filter(Boolean);
+    const [snapShareTrends, weather] = await Promise.all([
+      bestEffort(getSnapShareTrend(roster, Number(season)), {}, "snap share trend"),
+      bestEffort(getWeatherForTeams(teamsInPlay, opponents), {}, "weather"),
+    ]);
+
     const analysis = buildAnalysis({
       roster,
       freeAgents,
@@ -76,6 +87,8 @@ exports.handler = async (event) => {
       news,
       opponent,
       opportunityTrends,
+      snapShareTrends,
+      weather,
     });
 
     return jsonResponse(200, { teamName, ...analysis, generatedAt: new Date().toISOString() });

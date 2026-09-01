@@ -41,6 +41,39 @@ function vegasNudge(position, ownImplied, oppImplied) {
   return { multiplier, note };
 }
 
+// Game script: a big favorite tends to lean on the run to protect a lead
+// (more volume for their RB); a big underdog tends to throw more to catch up
+// (some of it garbage-time volume for their WRs). Only meaningful once the
+// spread is fairly lopsided — a close game doesn't skew game script much.
+const GAME_SCRIPT_MIN_SPREAD = 7; // spread magnitude below this: no effect
+const GAME_SCRIPT_MAX_SPREAD = 17; // spread magnitude at/above this: full effect
+const MAX_GAME_SCRIPT_NUDGE = 0.08;
+const GAME_SCRIPT_RELEVANCE = { RB: 1, WR: 0.6 };
+
+function gameScriptNudge(position, ownSpread) {
+  if (ownSpread == null || !GAME_SCRIPT_RELEVANCE[position]) return { multiplier: 0, note: null };
+  const magnitude = Math.abs(ownSpread);
+  if (magnitude < GAME_SCRIPT_MIN_SPREAD) return { multiplier: 0, note: null };
+
+  const strength = Math.min(1, (magnitude - GAME_SCRIPT_MIN_SPREAD) / (GAME_SCRIPT_MAX_SPREAD - GAME_SCRIPT_MIN_SPREAD));
+  const isFavorite = ownSpread < 0;
+  // RB benefits as a favorite (positive game script), WR benefits as an underdog
+  const direction = position === "RB" ? (isFavorite ? 1 : -1) : isFavorite ? -1 : 1;
+  const multiplier = direction * strength * GAME_SCRIPT_RELEVANCE[position] * MAX_GAME_SCRIPT_NUDGE;
+
+  const role = isFavorite ? "favorite" : "underdog";
+  const note =
+    position === "RB"
+      ? isFavorite
+        ? `positive game script (${role} by ${magnitude}) — likely more rush volume`
+        : `negative game script (${role} by ${magnitude}) — touches at risk if trailing`
+      : isFavorite
+      ? `negative game script (${role} by ${magnitude}) — fewer garbage-time throws`
+      : `positive game script (${role} by ${magnitude}) — likely more pass volume`;
+
+  return { multiplier, note };
+}
+
 // Real, named factors only — this is a heuristic 0-100 score, not a
 // calibrated probability. Always presented in the UI as a labeled estimate.
 function unitHealthNudge(position, ownHealth, oppHealth) {
@@ -120,9 +153,10 @@ function injuryAdjustment(injuryStatus) {
   }
 }
 
-function scorePlayer(player, opponents, rankings, unitHealth, weeksHistory, opportunityTrends) {
+function scorePlayer(player, opponents, rankings, unitHealth, weeksHistory, opportunityTrends, snapShareTrends, weather) {
   const opp = opponents[player.proTeam];
   const dvp = opp ? getDvpRank(rankings, opp.opponent, player.position) : null;
+  const rbReceivingRank = opp && player.position === "RB" ? getDvpRank(rankings, opp.opponent, "RB_REC") : null;
   const { multiplier: matchupMult, note: matchupNote } = matchupMultiplier(dvp);
   const { multiplier: injuryMult, flag: injuryFlag } = injuryAdjustment(player.injuryStatus);
 
@@ -134,9 +168,13 @@ function scorePlayer(player, opponents, rankings, unitHealth, weeksHistory, oppo
     ? vegasNudge(player.position, opp.impliedTotal, opponents[opp.opponent]?.impliedTotal)
     : { multiplier: 0, note: null };
 
+  const { multiplier: gameScriptMult, note: gameScriptNote } = opp
+    ? gameScriptNudge(player.position, opp.spread)
+    : { multiplier: 0, note: null };
+
   const base = player.projectedPoints ?? 0;
   const adjustedProjection = opp
-    ? Math.round(base * matchupMult * injuryMult * (1 + unitNudge + vegasMult) * 10) / 10
+    ? Math.round(base * matchupMult * injuryMult * (1 + unitNudge + vegasMult + gameScriptMult) * 10) / 10
     : Math.round(base * injuryMult * 10) / 10; // bye week: no matchup data
 
   const playerHistory = weeksHistory ? playerHistoryFromWeeks(weeksHistory, player.id) : null;
@@ -153,8 +191,10 @@ function scorePlayer(player, opponents, rankings, unitHealth, weeksHistory, oppo
     opponent: opp ? opp.opponent : "BYE",
     isHome: opp ? opp.isHome : null,
     dvpRank: dvp,
+    rbReceivingRank,
     matchupNote,
     vegasNote,
+    gameScriptNote,
     impliedTotal: opp ? opp.impliedTotal : null,
     injuryFlag,
     adjustedProjection,
@@ -162,6 +202,8 @@ function scorePlayer(player, opponents, rankings, unitHealth, weeksHistory, oppo
     confidence,
     history: playerHistory,
     opportunityTrend: opportunityTrends?.[player.id] || null,
+    snapShareTrend: snapShareTrends?.[player.id] || null,
+    weather: opp ? weather?.[player.proTeam] || null : null,
   };
 }
 
@@ -389,9 +431,11 @@ function buildAnalysis({
   news,
   opponent,
   opportunityTrends,
+  snapShareTrends,
+  weather,
 }) {
   const scoredRoster = roster.map((p) =>
-    scorePlayer(p, opponents, rankings, unitHealth, weeksHistory, opportunityTrends)
+    scorePlayer(p, opponents, rankings, unitHealth, weeksHistory, opportunityTrends, snapShareTrends, weather)
   );
   const scoredFreeAgents = freeAgents.map((p) => scorePlayer(p, opponents, rankings, unitHealth, weeksHistory));
 
@@ -439,8 +483,10 @@ function buildAnalysis({
             projectedPoints: l.player.projectedPoints,
             matchupNote: l.player.matchupNote,
             vegasNote: l.player.vegasNote,
+            gameScriptNote: l.player.gameScriptNote,
             injuryFlag: l.player.injuryFlag,
             confidence: l.player.confidence,
+            weather: l.player.weather,
           }
         : null,
     })),
@@ -469,8 +515,10 @@ function summarizePlayer(p) {
     projectedPoints: p.projectedPoints,
     adjustedProjection: p.adjustedProjection,
     dvpRank: p.dvpRank,
+    rbReceivingRank: p.rbReceivingRank || null,
     matchupNote: p.matchupNote,
     vegasNote: p.vegasNote,
+    gameScriptNote: p.gameScriptNote || null,
     impliedTotal: p.impliedTotal,
     injuryStatus: p.injuryStatus,
     injuryFlag: p.injuryFlag,
@@ -479,6 +527,8 @@ function summarizePlayer(p) {
     confidence: p.confidence,
     history: p.history,
     opportunityTrend: p.opportunityTrend || null,
+    snapShareTrend: p.snapShareTrend || null,
+    weather: p.weather || null,
   };
 }
 

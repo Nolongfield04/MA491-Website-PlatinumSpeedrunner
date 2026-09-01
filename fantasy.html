@@ -14,6 +14,7 @@
     .note-good { color: #2f7d4f; font-size: 0.85rem; }
     .note-bad { color: var(--accent-2); font-size: 0.85rem; }
     .note-flag { color: var(--accent-2); font-weight: 600; font-size: 0.85rem; }
+    .note-small { color: var(--text-dim); font-size: 0.8rem; }
     .takeaways { padding-left: 1.2rem; }
     .takeaways li { margin-bottom: 0.5rem; }
     .change-row { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 0.75rem; }
@@ -201,6 +202,12 @@
       return el("div", { class: cls, text: `Vegas: ${note}` });
     }
 
+    function gameScriptBadge(note) {
+      if (!note) return document.createTextNode("");
+      const cls = note.startsWith("positive") ? "note-good" : note.startsWith("negative") ? "note-bad" : "";
+      return el("div", { class: cls, text: `Game script: ${note}` });
+    }
+
     // Confidence is a heuristic estimate (role certainty + matchup extremity +
     // injury status + week-to-week volatility once tracked) — not a
     // calibrated probability. Labeled as such throughout the UI.
@@ -245,6 +252,7 @@
         const noteTd = el("td");
         if (p?.matchupNote) noteTd.appendChild(matchupBadge(p.matchupNote));
         if (p?.vegasNote) noteTd.appendChild(vegasBadge(p.vegasNote));
+        if (p?.gameScriptNote) noteTd.appendChild(gameScriptBadge(p.gameScriptNote));
         if (p?.injuryFlag) noteTd.appendChild(el("div", { class: "note-flag", text: p.injuryFlag }));
         tr.appendChild(noteTd);
         tbody.appendChild(tr);
@@ -256,7 +264,7 @@
     function renderRosterTable(players) {
       const table = el("table", { class: "ff-table" });
       table.appendChild(el("thead", {}, [
-        el("tr", {}, ["Player", "Pos", "Opp", "Adj. Pts", "ESPN Proj", "DVP Rank", "Confidence", "Notes"].map(h => el("th", { text: h })))
+        el("tr", {}, ["Player", "Pos", "Opp", "Adj. Pts", "ESPN Proj", "DVP (raw/SOS)", "Confidence", "Notes"].map(h => el("th", { text: h })))
       ]));
       const tbody = el("tbody");
       for (const p of players) {
@@ -266,13 +274,15 @@
         tr.appendChild(el("td", { text: p.onBye ? "BYE" : p.opponent }));
         tr.appendChild(el("td", { text: p.adjustedProjection }));
         tr.appendChild(el("td", { text: p.projectedPoints ?? "" }));
-        tr.appendChild(el("td", { text: p.dvpRank ? `#${p.dvpRank.rank}/${p.dvpRank.outOf}` : "—" }));
+        tr.appendChild(el("td", { text: p.dvpRank ? `#${p.dvpRank.rank} / #${p.dvpRank.sosAdjustedRank ?? p.dvpRank.rank}` : "—" }));
         const confTd = el("td");
         if (p.confidence) confTd.appendChild(confidenceBadge(p.confidence));
         tr.appendChild(confTd);
         const noteTd = el("td");
         if (p.matchupNote) noteTd.appendChild(matchupBadge(p.matchupNote));
         if (p.vegasNote) noteTd.appendChild(vegasBadge(p.vegasNote));
+        if (p.gameScriptNote) noteTd.appendChild(gameScriptBadge(p.gameScriptNote));
+        if (p.rbReceivingRank) noteTd.appendChild(el("div", { class: "note-small", text: `Pass-catching RB matchup: #${p.rbReceivingRank.rank}/${p.rbReceivingRank.outOf}` }));
         if (p.injuryFlag) noteTd.appendChild(el("div", { class: "note-flag", text: p.injuryFlag }));
         tr.appendChild(noteTd);
         tbody.appendChild(tr);
@@ -338,23 +348,60 @@
     }
 
     function renderOpportunityTrends(players) {
-      const withTrend = players.filter(p => p.opportunityTrend);
-      if (!withTrend.length) {
-        return el("p", { class: "placeholder", text: "No opportunity trend data available yet this season." });
+      const relevant = players.filter(p => p.opportunityTrend || p.snapShareTrend);
+      if (!relevant.length) {
+        return el("p", { class: "placeholder", text: "No opportunity/usage data available yet this season." });
       }
       const wrap = el("div");
-      const clsMap = { Increasing: "trend-up", Declining: "trend-down", Stable: "trend-stable" };
-      for (const p of withTrend) {
+      const clsMap = { Increasing: "trend-up", Emerging: "trend-up", Declining: "trend-down", Stable: "trend-stable" };
+      for (const p of relevant) {
         const t = p.opportunityTrend;
+        const s = p.snapShareTrend;
         const row = el("div", { class: "news-item" });
-        row.appendChild(el("div", {}, [
-          el("strong", { text: `${p.name} (${p.position})` }),
-          el("span", { class: `trend-tag ${clsMap[t.label] || "trend-stable"}`, text: t.label }),
-        ]));
-        row.appendChild(el("div", { class: "desc", text: `Last 3 games: ${t.last3Avg} ${t.metric}/gm vs. season avg ${t.seasonAvg} ${t.metric}/gm (${t.gamesLogged} games logged)` }));
+        const header = el("div", {}, [el("strong", { text: `${p.name} (${p.position})` })]);
+        if (t) header.appendChild(el("span", { class: `trend-tag ${clsMap[t.label] || "trend-stable"}`, text: `Usage: ${t.label}` }));
+        if (s) header.appendChild(el("span", { class: `trend-tag ${clsMap[s.label] || "trend-stable"}`, text: `Snaps: ${s.label}` }));
+        row.appendChild(header);
+
+        if (t) row.appendChild(el("div", { class: "desc", text: `Last 3 games: ${t.last3Avg} ${t.metric}/gm vs. season avg ${t.seasonAvg} ${t.metric}/gm (${t.gamesLogged} games logged)` }));
+        if (s) row.appendChild(el("div", { class: "desc", text: `Snap share: ${s.last3AvgPct}% (last 3) vs. ${s.seasonAvgPct}% (season avg, ${s.gamesLogged} games)` }));
+        if (t?.targetShare != null) row.appendChild(el("div", { class: "desc", text: `Target share: ${t.targetShare}% · Air yards share: ${t.airYardsShare ?? "—"}%` }));
+        if (t?.xfp) {
+          const cls = t.xfp.diff >= 0 ? "note-good" : "note-bad";
+          row.appendChild(el("div", { class: cls, text: `xFP: ${t.xfp.expectedFP} expected vs. ${t.xfp.actualFP} actual (${t.xfp.diff > 0 ? "+" : ""}${t.xfp.diff}) — ${t.xfp.verdict}` }));
+        }
         wrap.appendChild(row);
       }
       return wrap;
+    }
+
+    function renderWeather(players) {
+      const seen = new Map();
+      for (const p of players) {
+        if (p.weather && !p.onBye) seen.set(p.proTeam, { team: p.proTeam, opponent: p.opponent, ...p.weather });
+      }
+      if (!seen.size) {
+        return el("p", { class: "placeholder", text: "No outdoor-stadium games with usable forecast data for your roster's teams this week (domes carry no weather factor)." });
+      }
+      const table = el("table", { class: "ff-table" });
+      table.appendChild(el("thead", {}, [
+        el("tr", {}, ["Matchup", "Temp", "Wind", "Precip", "Risk"].map(h => el("th", { text: h })))
+      ]));
+      const tbody = el("tbody");
+      for (const w of seen.values()) {
+        const tr = el("tr");
+        tr.appendChild(el("td", { text: `${w.team} vs ${w.opponent}` }));
+        tr.appendChild(el("td", { text: `${w.tempF}°F` }));
+        tr.appendChild(el("td", { text: `${w.windMph} mph` }));
+        tr.appendChild(el("td", { text: `${w.precipChance}%` }));
+        const riskTd = el("td");
+        if (w.risk) riskTd.appendChild(el("div", { class: "note-bad", text: w.risk }));
+        else riskTd.appendChild(el("span", { class: "note-good", text: "No concerns" }));
+        tr.appendChild(riskTd);
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      return table;
     }
 
     function renderNews(news) {
@@ -444,10 +491,15 @@
         content.appendChild(renderWaivers(data.waiverTargets));
 
         content.appendChild(el("h2", { text: "Full Roster" }));
+        content.appendChild(el("p", { class: "meta-row", text: "DVP column: raw rank / strength-of-schedule-adjusted rank (1 = most exploitable, higher = tougher)." }));
         content.appendChild(renderRosterTable(data.fullRoster));
 
+        content.appendChild(el("h2", { text: "Weather" }));
+        content.appendChild(el("p", { class: "meta-row", text: "Outdoor-stadium games only — domes and retractable roofs carry no weather factor here." }));
+        content.appendChild(renderWeather(data.fullRoster));
+
         content.appendChild(el("h2", { text: "Opportunity Trends" }));
-        content.appendChild(el("p", { class: "meta-row", text: "Recent workload (targets/carries/attempts) vs. season average — a rising or falling role." }));
+        content.appendChild(el("p", { class: "meta-row", text: "Workload, target share, snap share, and expected-vs-actual points (xFP) — recent trend vs. season average." }));
         content.appendChild(renderOpportunityTrends(data.fullRoster));
 
         content.appendChild(el("h2", { text: "Player Trends" }));
