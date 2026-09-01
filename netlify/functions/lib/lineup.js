@@ -1,6 +1,66 @@
 const { getDvpRank } = require("./defense.js");
+const { playerHistoryFromWeeks } = require("./history.js");
 
 const STARTER_LOGIC_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"];
+
+// how much each position's output plausibly depends on each unit's health —
+// used both to nudge the point projection and to gauge confidence.
+const DL_RELEVANCE = { QB: 0.5, RB: 1.0, WR: 0.15, TE: 0.15, K: 0, DST: 0 };
+const SECONDARY_RELEVANCE = { QB: 0.3, WR: 1.0, TE: 0.7, RB: 0.05, K: 0, DST: 0 };
+const OWN_OL_RELEVANCE = { QB: 0.5, RB: 1.0, WR: 0.2, TE: 0.2, K: 0, DST: 0 };
+const MAX_UNIT_NUDGE = 0.08; // cap any single unit's effect on adjustedProjection at +/-8%
+
+// Real, named factors only — this is a heuristic 0-100 score, not a
+// calibrated probability. Always presented in the UI as a labeled estimate.
+function unitHealthNudge(position, ownHealth, oppHealth) {
+  if (!ownHealth || !oppHealth) return 0;
+  const boost =
+    oppHealth.DL * (DL_RELEVANCE[position] || 0) * MAX_UNIT_NUDGE +
+    oppHealth.secondary * (SECONDARY_RELEVANCE[position] || 0) * MAX_UNIT_NUDGE;
+  const penalty = ownHealth.OL * (OWN_OL_RELEVANCE[position] || 0) * MAX_UNIT_NUDGE;
+  return Math.max(-0.12, Math.min(0.12, boost - penalty));
+}
+
+function computeConfidence({ position, injuryStatus, percentStarted, dvp, playerHistory }) {
+  if (["Out", "IR", "Suspended"].includes(injuryStatus)) {
+    return { score: 0, label: "Not expected to play" };
+  }
+
+  const roleCertainty = (percentStarted ?? 50) / 100;
+
+  let matchupCertainty = 0.5;
+  if (dvp) {
+    const t = (dvp.rank - 1) / (dvp.outOf - 1);
+    matchupCertainty = Math.abs(t - 0.5) * 2;
+  }
+
+  const injuryCertainty = { Active: 1, Questionable: 0.5, Doubtful: 0.2 }[injuryStatus] ?? 1;
+
+  let volatilityCertainty = null;
+  if (playerHistory) {
+    // volatility is a point-swing (stddev); treat >12 pts of typical swing as "low certainty"
+    volatilityCertainty = Math.max(0, Math.min(1, 1 - playerHistory.volatility / 12));
+  }
+
+  const parts = [
+    { value: roleCertainty, weight: 0.3 },
+    { value: matchupCertainty, weight: 0.25 },
+    { value: injuryCertainty, weight: 0.25 },
+    ...(volatilityCertainty != null ? [{ value: volatilityCertainty, weight: 0.2 }] : []),
+  ];
+  const totalWeight = parts.reduce((s, p) => s + p.weight, 0);
+  const score = Math.round(
+    (parts.reduce((s, p) => s + p.value * p.weight, 0) / totalWeight) * 100
+  );
+
+  let label;
+  if (score >= 75) label = "High confidence";
+  else if (score >= 50) label = "Moderate confidence";
+  else if (score >= 30) label = "Boom/bust risk";
+  else label = "Low confidence";
+
+  return { score, label };
+}
 
 // scale DVP rank 1 (most exploitable) -> 32 (toughest) into a projection multiplier
 function matchupMultiplier(dvp) {
@@ -29,16 +89,29 @@ function injuryAdjustment(injuryStatus) {
   }
 }
 
-function scorePlayer(player, opponents, rankings) {
+function scorePlayer(player, opponents, rankings, unitHealth, weeksHistory) {
   const opp = opponents[player.proTeam];
   const dvp = opp ? getDvpRank(rankings, opp.opponent, player.position) : null;
   const { multiplier: matchupMult, note: matchupNote } = matchupMultiplier(dvp);
   const { multiplier: injuryMult, flag: injuryFlag } = injuryAdjustment(player.injuryStatus);
 
+  const ownHealth = unitHealth?.[player.proTeam];
+  const oppHealth = opp ? unitHealth?.[opp.opponent] : null;
+  const unitNudge = opp ? unitHealthNudge(player.position, ownHealth, oppHealth) : 0;
+
   const base = player.projectedPoints ?? 0;
   const adjustedProjection = opp
-    ? Math.round(base * matchupMult * injuryMult * 10) / 10
+    ? Math.round(base * matchupMult * injuryMult * (1 + unitNudge) * 10) / 10
     : Math.round(base * injuryMult * 10) / 10; // bye week: no matchup data
+
+  const playerHistory = weeksHistory ? playerHistoryFromWeeks(weeksHistory, player.id) : null;
+  const confidence = computeConfidence({
+    position: player.position,
+    injuryStatus: player.injuryStatus,
+    percentStarted: player.percentStarted,
+    dvp,
+    playerHistory,
+  });
 
   return {
     ...player,
@@ -49,6 +122,8 @@ function scorePlayer(player, opponents, rankings) {
     injuryFlag,
     adjustedProjection,
     onBye: !opp,
+    confidence,
+    history: playerHistory,
   };
 }
 
@@ -215,9 +290,20 @@ function buildKeyTakeaways({ scoredRoster, lineupChanges, waiverSuggestions, wee
   return takeaways;
 }
 
-function buildAnalysis({ roster, freeAgents, rosterSlots, opponents, rankings, week, defenseSource }) {
-  const scoredRoster = roster.map((p) => scorePlayer(p, opponents, rankings));
-  const scoredFreeAgents = freeAgents.map((p) => scorePlayer(p, opponents, rankings));
+function buildAnalysis({
+  roster,
+  freeAgents,
+  rosterSlots,
+  opponents,
+  rankings,
+  week,
+  defenseSource,
+  unitHealth,
+  weeksHistory,
+  news,
+}) {
+  const scoredRoster = roster.map((p) => scorePlayer(p, opponents, rankings, unitHealth, weeksHistory));
+  const scoredFreeAgents = freeAgents.map((p) => scorePlayer(p, opponents, rankings, unitHealth, weeksHistory));
 
   const optimalLineup = buildOptimalLineup(scoredRoster, rosterSlots);
   const startersNow = currentStarters(scoredRoster);
@@ -228,6 +314,7 @@ function buildAnalysis({ roster, freeAgents, rosterSlots, opponents, rankings, w
   return {
     week,
     defenseDataSource: defenseSource,
+    news: news || [],
     keyTakeaways,
     startingLineup: optimalLineup.lineup.map((l) => ({
       slot: l.slot,
@@ -240,6 +327,7 @@ function buildAnalysis({ roster, freeAgents, rosterSlots, opponents, rankings, w
             projectedPoints: l.player.projectedPoints,
             matchupNote: l.player.matchupNote,
             injuryFlag: l.player.injuryFlag,
+            confidence: l.player.confidence,
           }
         : null,
     })),
@@ -272,6 +360,9 @@ function summarizePlayer(p) {
     injuryStatus: p.injuryStatus,
     injuryFlag: p.injuryFlag,
     percentOwned: p.percentOwned,
+    percentStarted: p.percentStarted,
+    confidence: p.confidence,
+    history: p.history,
   };
 }
 

@@ -21,6 +21,19 @@
     .meta-row { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1.5rem; }
     #ff-error { background: rgba(161, 89, 44, 0.1); border: 1px solid rgba(161, 89, 44, 0.4); border-radius: 8px; padding: 1rem 1.25rem; }
     #ff-loading { color: var(--text-dim); }
+    .confidence-badge { display: inline-block; border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+    .confidence-high { background: rgba(47, 125, 79, 0.14); color: #2f7d4f; }
+    .confidence-moderate { background: rgba(110, 100, 85, 0.12); color: var(--text-dim); }
+    .confidence-boombust { background: rgba(161, 89, 44, 0.14); color: var(--accent-2); }
+    .confidence-low { background: rgba(161, 89, 44, 0.2); color: var(--accent-2); }
+    .confidence-none { background: rgba(120, 30, 30, 0.15); color: #a13c2c; }
+    .news-item { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+    .news-item:last-child { border-bottom: none; }
+    .news-item .players { color: var(--accent); font-size: 0.82rem; margin-top: 0.2rem; }
+    .news-item .desc { color: var(--text-dim); font-size: 0.88rem; margin-top: 0.2rem; }
+    .trend-block { margin-bottom: 1.25rem; }
+    .trend-block h4 { margin: 0 0 0.3rem; }
+    .trend-stats { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 0.4rem; }
   </style>
 </head>
 <body>
@@ -76,6 +89,22 @@
       return el("div", { class: cls, text: note });
     }
 
+    // Confidence is a heuristic estimate (role certainty + matchup extremity +
+    // injury status + week-to-week volatility once tracked) — not a
+    // calibrated probability. Labeled as such throughout the UI.
+    function confidenceBadge(confidence) {
+      if (!confidence) return document.createTextNode("");
+      const clsMap = {
+        "High confidence": "confidence-high",
+        "Moderate confidence": "confidence-moderate",
+        "Boom/bust risk": "confidence-boombust",
+        "Low confidence": "confidence-low",
+        "Not expected to play": "confidence-none",
+      };
+      const cls = clsMap[confidence.label] || "confidence-moderate";
+      return el("span", { class: `confidence-badge ${cls}`, text: `${confidence.label} (${confidence.score})` });
+    }
+
     function renderTakeaways(list) {
       const ul = el("ul", { class: "takeaways" });
       for (const t of list) ul.appendChild(el("li", { text: t }));
@@ -85,7 +114,7 @@
     function renderStartingLineup(rows) {
       const table = el("table", { class: "ff-table" });
       table.appendChild(el("thead", {}, [
-        el("tr", {}, ["Slot", "Player", "Opp", "Adj. Pts", "ESPN Proj", "Notes"].map(h => el("th", { text: h })))
+        el("tr", {}, ["Slot", "Player", "Opp", "Adj. Pts", "ESPN Proj", "Confidence", "Notes"].map(h => el("th", { text: h })))
       ]));
       const tbody = el("tbody");
       for (const row of rows) {
@@ -98,6 +127,9 @@
         tr.appendChild(el("td", { text: p ? `${p.opponent}` : "" }));
         tr.appendChild(el("td", { text: p ? p.adjustedProjection : "" }));
         tr.appendChild(el("td", { text: p ? p.projectedPoints ?? "" : "" }));
+        const confTd = el("td");
+        if (p?.confidence) confTd.appendChild(confidenceBadge(p.confidence));
+        tr.appendChild(confTd);
         const noteTd = el("td");
         if (p?.matchupNote) noteTd.appendChild(matchupBadge(p.matchupNote));
         if (p?.injuryFlag) noteTd.appendChild(el("div", { class: "note-flag", text: p.injuryFlag }));
@@ -111,7 +143,7 @@
     function renderRosterTable(players) {
       const table = el("table", { class: "ff-table" });
       table.appendChild(el("thead", {}, [
-        el("tr", {}, ["Player", "Pos", "Opp", "Adj. Pts", "ESPN Proj", "DVP Rank", "Notes"].map(h => el("th", { text: h })))
+        el("tr", {}, ["Player", "Pos", "Opp", "Adj. Pts", "ESPN Proj", "DVP Rank", "Confidence", "Notes"].map(h => el("th", { text: h })))
       ]));
       const tbody = el("tbody");
       for (const p of players) {
@@ -122,6 +154,9 @@
         tr.appendChild(el("td", { text: p.adjustedProjection }));
         tr.appendChild(el("td", { text: p.projectedPoints ?? "" }));
         tr.appendChild(el("td", { text: p.dvpRank ? `#${p.dvpRank.rank}/${p.dvpRank.outOf}` : "—" }));
+        const confTd = el("td");
+        if (p.confidence) confTd.appendChild(confidenceBadge(p.confidence));
+        tr.appendChild(confTd);
         const noteTd = el("td");
         if (p.matchupNote) noteTd.appendChild(matchupBadge(p.matchupNote));
         if (p.injuryFlag) noteTd.appendChild(el("div", { class: "note-flag", text: p.injuryFlag }));
@@ -164,6 +199,55 @@
       return wrap;
     }
 
+    function renderNews(news) {
+      if (!news.length) return el("p", { class: "placeholder", text: "No recent news matched to your roster." });
+      const wrap = el("div");
+      for (const item of news) {
+        const row = el("div", { class: "news-item" });
+        const headline = item.link
+          ? el("a", { href: item.link, target: "_blank", rel: "noopener", text: item.headline })
+          : el("strong", { text: item.headline });
+        row.appendChild(headline);
+        row.appendChild(el("div", { class: "players", text: item.players.join(", ") + (item.published ? ` — ${new Date(item.published).toLocaleDateString()}` : "") }));
+        if (item.description) row.appendChild(el("div", { class: "desc", text: item.description }));
+        wrap.appendChild(row);
+      }
+      return wrap;
+    }
+
+    function renderTrends(players) {
+      const withHistory = players.filter(p => p.history);
+      if (!withHistory.length) {
+        return el("p", { class: "placeholder", text: "Not enough completed weeks yet to show trends — check back after Week 1 finishes." });
+      }
+      const wrap = el("div");
+      for (const p of withHistory) {
+        const block = el("div", { class: "trend-block" });
+        block.appendChild(el("h4", { text: `${p.name} (${p.position})` }));
+        block.appendChild(el("div", {
+          class: "trend-stats",
+          text: `Avg deviation: ${p.history.avgDeviation > 0 ? "+" : ""}${p.history.avgDeviation} pts · Volatility: ${p.history.volatility} pts · Hit rate: ${p.history.hitRate}%`,
+        }));
+        const table = el("table", { class: "ff-table" });
+        table.appendChild(el("thead", {}, [
+          el("tr", {}, ["Week", "Projected", "Actual", "Deviation"].map(h => el("th", { text: h })))
+        ]));
+        const tbody = el("tbody");
+        for (const wk of p.history.series) {
+          const tr = el("tr");
+          tr.appendChild(el("td", { text: `Week ${wk.week}` }));
+          tr.appendChild(el("td", { text: wk.projected ?? "—" }));
+          tr.appendChild(el("td", { text: wk.actual ?? "—" }));
+          tr.appendChild(el("td", { text: wk.deviation != null ? (wk.deviation > 0 ? "+" : "") + wk.deviation : "—" }));
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        block.appendChild(table);
+        wrap.appendChild(block);
+      }
+      return wrap;
+    }
+
     async function loadAnalysis() {
       const loading = document.getElementById("ff-loading");
       const errorBox = document.getElementById("ff-error");
@@ -179,6 +263,9 @@
         content.appendChild(el("h2", { text: "Key Takeaways" }));
         content.appendChild(renderTakeaways(data.keyTakeaways));
 
+        content.appendChild(el("h2", { text: "News" }));
+        content.appendChild(renderNews(data.news));
+
         content.appendChild(el("h2", { text: "Recommended Starting Lineup" }));
         content.appendChild(renderStartingLineup(data.startingLineup));
 
@@ -190,6 +277,10 @@
 
         content.appendChild(el("h2", { text: "Full Roster" }));
         content.appendChild(renderRosterTable(data.fullRoster));
+
+        content.appendChild(el("h2", { text: "Player Trends" }));
+        content.appendChild(el("p", { class: "meta-row", text: "Projected vs. actual points by week, tracked as the season goes on." }));
+        content.appendChild(renderTrends(data.fullRoster));
 
         loading.hidden = true;
         content.hidden = false;

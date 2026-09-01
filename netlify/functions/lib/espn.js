@@ -69,16 +69,28 @@ async function espnFetch(path, { season, leagueId, espnS2, swid }, extraHeaders 
   return res.json();
 }
 
-function normalizePlayer(entry) {
+// stats entries aren't tagged to "current week" — each player carries one
+// entry per scoring period, so a week must always be specified explicitly
+// or .find() can silently return an arbitrary (often wrong) week's numbers.
+function getStatsForWeek(rawStats, week) {
+  const stats = rawStats || [];
+  const projected = stats.find(
+    (s) => s.scoringPeriodId === week && s.statSourceId === 1 && s.statSplitTypeId === 1
+  );
+  const actual = stats.find(
+    (s) => s.scoringPeriodId === week && s.statSourceId === 0 && s.statSplitTypeId === 1
+  );
+  return {
+    projectedPoints: projected ? round1(projected.appliedTotal) : null,
+    actualPoints: actual ? round1(actual.appliedTotal) : null,
+  };
+}
+
+function normalizePlayer(entry, week) {
   const p = entry.player || entry.playerPoolEntry?.player;
   const appliedStatTotal =
     entry.playerPoolEntry?.appliedStatTotal ?? entry.appliedStatTotal ?? null;
-  const projected = (p.stats || []).find(
-    (s) => s.statSourceId === 1 && s.statSplitTypeId === 1
-  );
-  const actual = (p.stats || []).find(
-    (s) => s.statSourceId === 0 && s.statSplitTypeId === 1
-  );
+  const { projectedPoints, actualPoints } = getStatsForWeek(p.stats, week);
   return {
     id: p.id,
     name: p.fullName,
@@ -86,10 +98,12 @@ function normalizePlayer(entry) {
     eligibleSlots: p.eligibleSlots || [],
     proTeam: proTeamAbbr(p.proTeamId),
     injuryStatus: INJURY_STATUS_MAP[p.injuryStatus] || p.injuryStatus || "Active",
-    projectedPoints: projected ? round1(projected.appliedTotal) : appliedStatTotal ? round1(appliedStatTotal) : null,
-    actualPoints: actual ? round1(actual.appliedTotal) : null,
+    projectedPoints: projectedPoints ?? (appliedStatTotal ? round1(appliedStatTotal) : null),
+    actualPoints,
     percentOwned: p.ownership ? round1(p.ownership.percentOwned) : null,
+    percentStarted: p.ownership ? round1(p.ownership.percentStarted) : null,
     lineupSlotId: entry.lineupSlotId,
+    rawStats: p.stats || [],
   };
 }
 
@@ -109,7 +123,7 @@ async function getLeagueRosterAndSettings(cfg) {
     throw new Error(`Team ${cfg.teamId} not found in league ${cfg.leagueId}`);
   }
 
-  const roster = (team.roster?.entries || []).map(normalizePlayer);
+  const roster = (team.roster?.entries || []).map((entry) => normalizePlayer(entry, week));
 
   const rosterSlots = [];
   const lineupSlotCounts = data.settings?.rosterSettings?.lineupSlotCounts || {};
@@ -134,7 +148,13 @@ async function getFreeAgents(cfg, week) {
   const data = await espnFetch(`?view=kona_player_info&scoringPeriodId=${week}`, cfg, {
     "X-Fantasy-Filter": JSON.stringify(filter),
   });
-  return (data.players || []).map(normalizePlayer);
+  return (data.players || []).map((entry) => normalizePlayer(entry, week));
 }
 
-module.exports = { getLeagueRosterAndSettings, getFreeAgents, positionName, proTeamAbbr };
+module.exports = {
+  getLeagueRosterAndSettings,
+  getFreeAgents,
+  positionName,
+  proTeamAbbr,
+  getStatsForWeek,
+};

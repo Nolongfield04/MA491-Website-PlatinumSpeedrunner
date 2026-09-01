@@ -25,4 +25,16 @@ async function getWeekOpponents(week, season) {
   return opponents; // { TEAM_ABBR: { opponent, isHome } }, teams on bye are simply absent
 }
 
-module.exports = { getWeekOpponents };
+async function isWeekComplete(week, season) {
+  const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&year=${season}`;
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!res.ok) {
+    throw new Error(`ESPN scoreboard request failed (${res.status})`);
+  }
+  const data = await res.json();
+  const events = data.events || [];
+  if (events.length === 0) return false; // no schedule data yet — can't be "complete"
+  return events.every((e) => e.competitions?.[0]?.status?.type?.completed === true);
+}
+
+module.exports = { getWeekOpponents, isWeekComplete };

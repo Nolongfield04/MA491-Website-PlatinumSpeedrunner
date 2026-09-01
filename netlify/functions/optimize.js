@@ -1,7 +1,23 @@
+const { connectLambda } = require("@netlify/blobs");
 const { getLeagueRosterAndSettings, getFreeAgents } = require("./lib/espn.js");
 const { getWeekOpponents } = require("./lib/schedule.js");
 const { getDefenseRankings } = require("./lib/defense.js");
+const { getUnitHealth } = require("./lib/injuries.js");
+const { getPlayerNews } = require("./lib/news.js");
+const { getAllWeeks } = require("./lib/history.js");
 const { buildAnalysis } = require("./lib/lineup.js");
+
+// News/injuries/history are enrichments layered on top of the core roster +
+// lineup logic — if any of them hiccup, the page should still work with
+// whatever it has rather than failing the whole request.
+async function bestEffort(promise, fallback, label) {
+  try {
+    return await promise;
+  } catch (err) {
+    console.error(`optimize: ${label} failed, continuing without it:`, err.message);
+    return fallback;
+  }
+}
 
 function currentSeason() {
   const now = new Date();
@@ -10,7 +26,13 @@ function currentSeason() {
   return now.getUTCMonth() >= 2 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
-exports.handler = async () => {
+exports.handler = async (event) => {
+  try {
+    connectLambda(event);
+  } catch (err) {
+    console.error("optimize: connectLambda failed, history will be unavailable:", err.message);
+  }
+
   const cfg = {
     season: process.env.ESPN_SEASON || String(currentSeason()),
     leagueId: process.env.ESPN_LEAGUE_ID,
@@ -30,10 +52,13 @@ exports.handler = async () => {
 
   try {
     const { week, season, roster, rosterSlots, teamName } = await getLeagueRosterAndSettings(cfg);
-    const [freeAgents, opponents, defense] = await Promise.all([
+    const [freeAgents, opponents, defense, unitHealth, news, weeksHistory] = await Promise.all([
       getFreeAgents(cfg, week),
       getWeekOpponents(week, season),
       getDefenseRankings(Number(season)),
+      bestEffort(getUnitHealth(), {}, "unit injury health"),
+      bestEffort(getPlayerNews(roster), [], "player news"),
+      bestEffort(getAllWeeks(), [], "weekly history"),
     ]);
 
     const analysis = buildAnalysis({
@@ -44,6 +69,9 @@ exports.handler = async () => {
       rankings: defense.rankings,
       week,
       defenseSource: defense.source,
+      unitHealth,
+      weeksHistory,
+      news,
     });
 
     return jsonResponse(200, { teamName, ...analysis, generatedAt: new Date().toISOString() });

@@ -4,6 +4,11 @@
 [functions]
   directory = "netlify/functions"
 
+[functions."snapshot-week"]
+  # Tuesdays 14:00 UTC — after Monday Night Football wraps, before the next
+  # week's roster moves. Finalizes the just-completed week's results.
+  schedule = "0 14 * * 2"
+
 [[headers]]
   for = "/*"
   [headers.values]

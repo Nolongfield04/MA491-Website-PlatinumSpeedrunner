@@ -1,0 +1,7 @@
+{
+  "name": "platinumspeedrunner-site",
+  "private": true,
+  "dependencies": {
+    "@netlify/blobs": "^11.0.2"
+  }
+}
