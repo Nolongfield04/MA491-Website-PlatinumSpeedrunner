@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>platinumspeedrunner &mdash; MA491</title>
+  <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <a class="site-title" href="../index.html">platinumspeedrunner</a>
+      <ul class="nav-links">
+        <li><a href="../index.html">About</a></li>
+        <li><a href="../resume.html">Resume</a></li>
+        <li><a href="../projects.html" class="active">Math Projects</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <h1>MA491</h1>
+    <p class="subtitle">Coursework and projects for MA491.</p>
+    <p><a href="../projects.html">&larr; Back to Math Projects</a></p>
+
+    <div class="card placeholder">
+      <span class="status planned">Planned</span>
+      <h3>[MA491 project #1 title]</h3>
+      <p>[Description, problem statement, or link to write-up/code for this project.]</p>
+    </div>
+
+    <div class="card placeholder">
+      <span class="status planned">Planned</span>
+      <h3>[MA491 project #2 title]</h3>
+      <p>[Description, problem statement, or link to write-up/code for this project.]</p>
+    </div>
+  </main>
+
+  <footer>
+    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Netlify.
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
