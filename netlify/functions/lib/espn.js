@@ -38,7 +38,9 @@ function proTeamAbbr(proTeamId) {
 }
 
 async function espnFetch(path, { season, leagueId, espnS2, swid }, extraHeaders = {}) {
-  const url = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}${path}`;
+  // fantasy.espn.com/apis/v3/... now unconditionally 302-redirects (ESPN moved
+  // the actual read API to this dedicated subdomain).
+  const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${leagueId}${path}`;
   const res = await fetch(url, {
     headers: {
       Cookie: `espn_s2=${espnS2}; SWID=${swid}`,
