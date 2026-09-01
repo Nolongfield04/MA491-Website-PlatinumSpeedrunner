@@ -34,6 +34,84 @@
     .trend-block { margin-bottom: 1.25rem; }
     .trend-block h4 { margin: 0 0 0.3rem; }
     .trend-stats { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 0.4rem; }
+
+    /* football-field theming, scoped to this page */
+    body {
+      background-color: var(--bg);
+      background-image: repeating-linear-gradient(
+        180deg,
+        rgba(92, 111, 62, 0.05) 0px,
+        rgba(92, 111, 62, 0.05) 42px,
+        transparent 42px,
+        transparent 84px
+      );
+    }
+
+    .ff-hero {
+      position: relative;
+      overflow: hidden;
+      border-radius: 14px;
+      padding: 2.25rem 1.75rem;
+      margin-bottom: 2rem;
+      color: #f4efe4;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0.1) 0,
+          rgba(255, 255, 255, 0.1) 2px,
+          transparent 2px,
+          transparent 56px
+        ),
+        linear-gradient(155deg, #3f5730 0%, #5c6f3e 55%, #6d8148 100%);
+      box-shadow: inset 0 0 0 6px rgba(244, 239, 228, 0.12);
+    }
+    .ff-hero::before,
+    .ff-hero::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 10px;
+      background: rgba(244, 239, 228, 0.35);
+    }
+    .ff-hero::before { left: 0; }
+    .ff-hero::after { right: 0; }
+    .ff-hero-inner { position: relative; z-index: 1; }
+    .ff-hero h1 {
+      color: #fdfaf2;
+      margin: 0 0 0.4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .ff-hero .subtitle {
+      color: rgba(253, 250, 242, 0.88);
+      margin: 0;
+    }
+    .football-icon { flex-shrink: 0; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); }
+
+    main h2 {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-left: 4px solid var(--accent-2);
+      padding-left: 0.65rem;
+    }
+
+    .scoreboard {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: #2a3320;
+      color: #d9e6c9;
+      border-radius: 8px;
+      padding: 0.5rem 0.9rem;
+      font-family: "Courier New", monospace;
+      font-size: 0.82rem;
+      letter-spacing: 0.02em;
+      margin-bottom: 1.5rem;
+    }
+    .scoreboard .sb-dot { color: #8fae5a; }
   </style>
 </head>
 <body>
@@ -50,8 +128,21 @@
   </header>
 
   <main>
-    <h1>Fantasy Football Lineup Optimizer</h1>
-    <p class="subtitle">Live matchup-adjusted start/sit and waiver recommendations, recomputed on every page load.</p>
+    <div class="ff-hero">
+      <div class="ff-hero-inner">
+        <h1>
+          <svg class="football-icon" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
+            <ellipse cx="50" cy="50" rx="46" ry="26" fill="#7a4a26" stroke="#3d2412" stroke-width="3" />
+            <path d="M14 50 Q50 30 86 50 Q50 70 14 50 Z" fill="none" stroke="#f4efe4" stroke-width="2" opacity="0.55" />
+            <line x1="50" y1="30" x2="50" y2="70" stroke="#f4efe4" stroke-width="3" />
+            <line x1="42" y1="36" x2="42" y2="64" stroke="#f4efe4" stroke-width="2" />
+            <line x1="58" y1="36" x2="58" y2="64" stroke="#f4efe4" stroke-width="2" />
+          </svg>
+          Fantasy Football Lineup Optimizer
+        </h1>
+        <p class="subtitle">Live matchup-adjusted start/sit and waiver recommendations, recomputed on every page load.</p>
+      </div>
+    </div>
 
     <div id="ff-loading">Pulling your roster, opponent schedule, and defense-vs-position stats&hellip;</div>
     <div id="ff-error" hidden></div>
@@ -258,7 +349,14 @@
         if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
 
         content.innerHTML = "";
-        content.appendChild(el("div", { class: "meta-row", text: `${data.teamName} — Week ${data.week} — generated ${new Date(data.generatedAt).toLocaleString()} — defense data: ${data.defenseDataSource}` }));
+        content.appendChild(el("div", { class: "scoreboard" }, [
+          el("span", { text: data.teamName }),
+          el("span", { class: "sb-dot", text: "•" }),
+          el("span", { text: `WEEK ${data.week}` }),
+          el("span", { class: "sb-dot", text: "•" }),
+          el("span", { text: new Date(data.generatedAt).toLocaleString() }),
+        ]));
+        content.appendChild(el("p", { class: "meta-row", text: `Defense data: ${data.defenseDataSource}` }));
 
         content.appendChild(el("h2", { text: "Key Takeaways" }));
         content.appendChild(renderTakeaways(data.keyTakeaways));
