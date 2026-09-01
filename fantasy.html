@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>platinumspeedrunner &mdash; Fantasy Football</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .ff-table { width: 100%; border-collapse: collapse; margin: 0.75rem 0 1.5rem; font-size: 0.92rem; }
+    .ff-table th, .ff-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+    .ff-table th { color: var(--text-dim); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .ff-table tr:last-child td { border-bottom: none; }
+    .empty-slot { color: var(--text-dim); font-style: italic; }
+    .note-good { color: #2f7d4f; font-size: 0.85rem; }
+    .note-bad { color: var(--accent-2); font-size: 0.85rem; }
+    .note-flag { color: var(--accent-2); font-weight: 600; font-size: 0.85rem; }
+    .takeaways { padding-left: 1.2rem; }
+    .takeaways li { margin-bottom: 0.5rem; }
+    .change-row { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 0.75rem; }
+    .change-row .arrow { color: var(--text-dim); margin: 0 0.4rem; }
+    .meta-row { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1.5rem; }
+    #ff-error { background: rgba(161, 89, 44, 0.1); border: 1px solid rgba(161, 89, 44, 0.4); border-radius: 8px; padding: 1rem 1.25rem; }
+    #ff-loading { color: var(--text-dim); }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <a class="site-title" href="index.html">platinumspeedrunner</a>
+      <ul class="nav-links">
+        <li><a href="index.html">About</a></li>
+        <li><a href="resume.html">Resume</a></li>
+        <li><a href="projects.html">Math Projects</a></li>
+        <li><a href="fantasy.html" class="active">Fantasy Football</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Fantasy Football Lineup Optimizer</h1>
+    <p class="subtitle">Live matchup-adjusted start/sit and waiver recommendations, recomputed on every page load.</p>
+
+    <div id="ff-loading">Pulling your roster, opponent schedule, and defense-vs-position stats&hellip;</div>
+    <div id="ff-error" hidden></div>
+    <div id="ff-content" hidden></div>
+  </main>
+
+  <footer>
+    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Netlify.
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    function el(tag, attrs, children) {
+      const node = document.createElement(tag);
+      if (attrs) for (const [k, v] of Object.entries(attrs)) {
+        if (k === "text") node.textContent = v;
+        else if (k === "class") node.className = v;
+        else node.setAttribute(k, v);
+      }
+      if (children) for (const c of children) node.appendChild(c);
+      return node;
+    }
+
+    function playerCell(p) {
+      if (!p) return el("span", { class: "empty-slot", text: "— empty —" });
+      const wrap = el("div");
+      wrap.appendChild(el("strong", { text: p.name || p.player?.name }));
+      return wrap;
+    }
+
+    function matchupBadge(note) {
+      if (!note) return document.createTextNode("");
+      const cls = note.includes("great") ? "note-good" : note.includes("tough") ? "note-bad" : "";
+      return el("div", { class: cls, text: note });
+    }
+
+    function renderTakeaways(list) {
+      const ul = el("ul", { class: "takeaways" });
+      for (const t of list) ul.appendChild(el("li", { text: t }));
+      return ul;
+    }
+
+    function renderStartingLineup(rows) {
+      const table = el("table", { class: "ff-table" });
+      table.appendChild(el("thead", {}, [
+        el("tr", {}, ["Slot", "Player", "Opp", "Adj. Pts", "ESPN Proj", "Notes"].map(h => el("th", { text: h })))
+      ]));
+      const tbody = el("tbody");
+      for (const row of rows) {
+        const p = row.player;
+        const tr = el("tr");
+        tr.appendChild(el("td", { text: row.slot }));
+        const nameTd = el("td");
+        nameTd.appendChild(playerCell(p));
+        tr.appendChild(nameTd);
+        tr.appendChild(el("td", { text: p ? `${p.opponent}` : "" }));
+        tr.appendChild(el("td", { text: p ? p.adjustedProjection : "" }));
+        tr.appendChild(el("td", { text: p ? p.projectedPoints ?? "" : "" }));
+        const noteTd = el("td");
+        if (p?.matchupNote) noteTd.appendChild(matchupBadge(p.matchupNote));
+        if (p?.injuryFlag) noteTd.appendChild(el("div", { class: "note-flag", text: p.injuryFlag }));
+        tr.appendChild(noteTd);
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      return table;
+    }
+
+    function renderRosterTable(players) {
+      const table = el("table", { class: "ff-table" });
+      table.appendChild(el("thead", {}, [
+        el("tr", {}, ["Player", "Pos", "Opp", "Adj. Pts", "ESPN Proj", "DVP Rank", "Notes"].map(h => el("th", { text: h })))
+      ]));
+      const tbody = el("tbody");
+      for (const p of players) {
+        const tr = el("tr");
+        tr.appendChild(el("td", { text: p.name }));
+        tr.appendChild(el("td", { text: p.position }));
+        tr.appendChild(el("td", { text: p.onBye ? "BYE" : p.opponent }));
+        tr.appendChild(el("td", { text: p.adjustedProjection }));
+        tr.appendChild(el("td", { text: p.projectedPoints ?? "" }));
+        tr.appendChild(el("td", { text: p.dvpRank ? `#${p.dvpRank.rank}/${p.dvpRank.outOf}` : "—" }));
+        const noteTd = el("td");
+        if (p.matchupNote) noteTd.appendChild(matchupBadge(p.matchupNote));
+        if (p.injuryFlag) noteTd.appendChild(el("div", { class: "note-flag", text: p.injuryFlag }));
+        tr.appendChild(noteTd);
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      return table;
+    }
+
+    function renderChanges(changes) {
+      if (!changes.length) return el("p", { class: "placeholder", text: "No changes recommended — your current lineup is already optimal." });
+      const wrap = el("div");
+      for (const c of changes) {
+        const row = el("div", { class: "change-row" });
+        row.appendChild(el("div", {}, [
+          el("strong", { text: `Start ${c.start.name}` }),
+          el("span", { class: "arrow", text: "instead of" }),
+          el("strong", { text: c.bench.name }),
+        ]));
+        row.appendChild(el("div", { class: "meta-row", text: c.reason }));
+        wrap.appendChild(row);
+      }
+      return wrap;
+    }
+
+    function renderWaivers(targets) {
+      if (!targets.length) return el("p", { class: "placeholder", text: "No clear waiver upgrades found this week." });
+      const wrap = el("div");
+      for (const w of targets) {
+        const row = el("div", { class: "change-row" });
+        row.appendChild(el("div", {}, [
+          el("strong", { text: `Add ${w.add.name} (${w.add.position})` }),
+          el("span", { class: "arrow", text: "drop" }),
+          el("strong", { text: w.drop.name }),
+        ]));
+        row.appendChild(el("div", { class: "meta-row", text: w.reason }));
+        wrap.appendChild(row);
+      }
+      return wrap;
+    }
+
+    async function loadAnalysis() {
+      const loading = document.getElementById("ff-loading");
+      const errorBox = document.getElementById("ff-error");
+      const content = document.getElementById("ff-content");
+      try {
+        const res = await fetch("/.netlify/functions/optimize");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+
+        content.innerHTML = "";
+        content.appendChild(el("div", { class: "meta-row", text: `${data.teamName} — Week ${data.week} — generated ${new Date(data.generatedAt).toLocaleString()} — defense data: ${data.defenseDataSource}` }));
+
+        content.appendChild(el("h2", { text: "Key Takeaways" }));
+        content.appendChild(renderTakeaways(data.keyTakeaways));
+
+        content.appendChild(el("h2", { text: "Recommended Starting Lineup" }));
+        content.appendChild(renderStartingLineup(data.startingLineup));
+
+        content.appendChild(el("h2", { text: "Suggested Changes" }));
+        content.appendChild(renderChanges(data.suggestedChanges));
+
+        content.appendChild(el("h2", { text: "Waiver Targets" }));
+        content.appendChild(renderWaivers(data.waiverTargets));
+
+        content.appendChild(el("h2", { text: "Full Roster" }));
+        content.appendChild(renderRosterTable(data.fullRoster));
+
+        loading.hidden = true;
+        content.hidden = false;
+      } catch (err) {
+        loading.hidden = true;
+        errorBox.textContent = `Couldn't load analysis: ${err.message}`;
+        errorBox.hidden = false;
+      }
+    }
+
+    loadAnalysis();
+  </script>
+</body>
+</html>

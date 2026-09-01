@@ -14,6 +14,7 @@
         <li><a href="index.html">About</a></li>
         <li><a href="resume.html">Resume</a></li>
         <li><a href="projects.html" class="active">Math Projects</a></li>
+        <li><a href="fantasy.html">Fantasy Football</a></li>
       </ul>
     </nav>
   </header>
@@ -24,20 +25,21 @@
     <p><a href="MA491/index.html">Browse MA491 coursework &rarr;</a></p>
 
     <div class="card">
-      <span class="status planned">Planned</span>
+      <span class="status in-progress">In Progress</span>
       <h3>Fantasy Football Lineup Optimizer</h3>
       <p>Connects to my ESPN Fantasy Football league via the ESPN Fantasy API to pull
-        my roster, matchups, and league settings each week. Combines that with
-        statistics scraped from public sources (weekly projections, opponent
-        defensive rankings, injury reports, snap counts) to build an
+        my roster, free agents, and injury statuses fresh on every page load via a
+        Netlify serverless function. Combines that with real historical
+        defense-vs-position performance data (nflverse) to build an
         opponent-adjusted scoring model. The model ranks every player on my
         roster and every available free agent at each position, then
         recommends the starting lineup and any free-agent swaps that maximize
-        my expected win probability for that week's matchup.</p>
+        my expected points for that week's matchup. <a href="fantasy.html">Try it &rarr;</a></p>
       <div class="tag-list">
-        <span class="tag">Python</span>
+        <span class="tag">Node.js</span>
+        <span class="tag">Netlify Functions</span>
         <span class="tag">ESPN API</span>
-        <span class="tag">Web Scraping</span>
+        <span class="tag">nflverse</span>
         <span class="tag">Statistical Modeling</span>
       </div>
     </div>
