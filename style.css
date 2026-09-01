@@ -1,11 +1,11 @@
 :root {
-  --bg: #0f1115;
-  --bg-alt: #161922;
-  --text: #e8eaf0;
-  --text-dim: #a5abbb;
-  --accent: #7dd3fc;
-  --accent-2: #a78bfa;
-  --border: #262a35;
+  --bg: #f4efe4;
+  --bg-alt: #ece2cd;
+  --text: #2e2a22;
+  --text-dim: #6e6455;
+  --accent: #5c6f3e;
+  --accent-2: #a1592c;
+  --border: #ddd0b5;
   --max-width: 860px;
 }
 
@@ -132,9 +132,9 @@ h2 {
 }
 
 .tag {
-  background: rgba(125, 211, 252, 0.12);
+  background: rgba(92, 111, 62, 0.12);
   color: var(--accent);
-  border: 1px solid rgba(125, 211, 252, 0.3);
+  border: 1px solid rgba(92, 111, 62, 0.35);
   border-radius: 999px;
   padding: 0.15rem 0.7rem;
   font-size: 0.8rem;
@@ -149,21 +149,21 @@ h2 {
 }
 
 .status.in-progress {
-  background: rgba(167, 139, 250, 0.15);
+  background: rgba(161, 89, 44, 0.14);
   color: var(--accent-2);
-  border: 1px solid rgba(167, 139, 250, 0.35);
+  border: 1px solid rgba(161, 89, 44, 0.4);
 }
 
 .status.planned {
-  background: rgba(165, 171, 187, 0.12);
+  background: rgba(110, 100, 85, 0.12);
   color: var(--text-dim);
   border: 1px solid var(--border);
 }
 
 .status.done {
-  background: rgba(74, 222, 128, 0.12);
-  color: #4ade80;
-  border: 1px solid rgba(74, 222, 128, 0.35);
+  background: rgba(47, 125, 79, 0.14);
+  color: #2f7d4f;
+  border: 1px solid rgba(47, 125, 79, 0.4);
 }
 
 ul.plain {
