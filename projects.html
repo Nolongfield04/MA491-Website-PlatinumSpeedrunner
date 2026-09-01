@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>platinumspeedrunner &mdash; Math Projects</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <a class="site-title" href="index.html">platinumspeedrunner</a>
+      <ul class="nav-links">
+        <li><a href="index.html">About</a></li>
+        <li><a href="resume.html">Resume</a></li>
+        <li><a href="projects.html" class="active">Math Projects</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Math Projects</h1>
+    <p class="subtitle">Projects I'm working on or planning to explore.</p>
+
+    <div class="card placeholder">
+      <span class="status planned">Planned</span>
+      <h3>[Project title #1]</h3>
+      <p>[Short description of the project, the math area it touches, and what
+        you hope to explore or prove.]</p>
+      <div class="tag-list">
+        <span class="tag">[Topic]</span>
+      </div>
+    </div>
+
+    <div class="card placeholder">
+      <span class="status in-progress">In Progress</span>
+      <h3>[Project title #2]</h3>
+      <p>[Short description of the project.]</p>
+      <div class="tag-list">
+        <span class="tag">[Topic]</span>
+      </div>
+    </div>
+
+    <div class="card placeholder">
+      <span class="status done">Done</span>
+      <h3>[Project title #3]</h3>
+      <p>[Short description, with a link to write-up or code if applicable.]</p>
+      <div class="tag-list">
+        <span class="tag">[Topic]</span>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Netlify.
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

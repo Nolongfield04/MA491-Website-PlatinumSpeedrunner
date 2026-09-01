@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>platinumspeedrunner &mdash; Resume</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <a class="site-title" href="index.html">platinumspeedrunner</a>
+      <ul class="nav-links">
+        <li><a href="index.html">About</a></li>
+        <li><a href="resume.html" class="active">Resume</a></li>
+        <li><a href="projects.html">Math Projects</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Resume</h1>
+    <p class="subtitle placeholder">[Optional: link to a downloadable PDF version of your resume here.]</p>
+
+    <h2>Education</h2>
+    <div class="card placeholder">
+      <h3>[Degree / Program name]</h3>
+      <div class="meta">[Institution &middot; Start&ndash;End dates]</div>
+      <p>[Relevant coursework, honors, GPA, or notes.]</p>
+    </div>
+
+    <h2>Experience</h2>
+    <div class="card placeholder">
+      <h3>[Job / Role title]</h3>
+      <div class="meta">[Organization &middot; Start&ndash;End dates]</div>
+      <ul class="plain">
+        <li>[Responsibility or achievement #1]</li>
+        <li>[Responsibility or achievement #2]</li>
+      </ul>
+    </div>
+
+    <h2>Awards &amp; Honors</h2>
+    <ul class="plain placeholder">
+      <li>[Award or honor #1 &mdash; year]</li>
+      <li>[Award or honor #2 &mdash; year]</li>
+    </ul>
+
+    <h2>Skills</h2>
+    <div class="tag-list placeholder">
+      <span class="tag">[Skill 1]</span>
+      <span class="tag">[Skill 2]</span>
+      <span class="tag">[Skill 3]</span>
+    </div>
+  </main>
+
+  <footer>
+    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Netlify.
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
