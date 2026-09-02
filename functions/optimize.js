@@ -100,7 +100,7 @@ export async function onRequestGet({ env }) {
       });
     } catch (err) {
       console.error("optimize: trade analyzer failed, continuing without it:", err.message);
-      tradeAnalyzer = { topTrades: [], allTrades: [] };
+      tradeAnalyzer = { topTrades: [] };
     }
 
     return jsonResponse(200, { teamName, ...analysis, tradeAnalyzer, generatedAt: new Date().toISOString() });

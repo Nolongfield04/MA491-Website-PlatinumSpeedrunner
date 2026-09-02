@@ -1,21 +1,21 @@
-// Trade analyzer: same-position, 1-for-1 trades against every other team in
-// the league. Reuses the exact scoring pipeline (matchup/Vegas/injury-adjusted
-// weekly projection) that drives the lineup optimizer elsewhere on this page
-// — so, like the waiver suggestions, this is a snapshot signal for the
-// current week, not a season-long dynasty trade value.
+// Recommended trades: ranks every tradeable-position player rostered by the
+// rest of the league (pooled together, not grouped by team) against each of
+// my own tradeable players, using the same scoring pipeline (matchup/Vegas/
+// injury-adjusted weekly projection) that drives the lineup optimizer
+// elsewhere on this page — a snapshot signal for the current week, not a
+// season-long dynasty trade value.
 //
-// The ranking signal isn't raw player value, though — it's each side's actual
+// The ranking signal isn't raw player value, though — it's my own
 // optimal-lineup delta after the swap. That's what keeps a WR3-for-WR3 trade
 // between two already-deep receiving corps from outranking a trade that
-// actually plugs a starting hole.
+// actually plugs a starting hole. Doesn't consider which team a target
+// belongs to, or whether they'd realistically accept — this is a target
+// list, not a proposal to a specific owner (yet).
 
 import { scorePlayer, buildOptimalLineup } from "./lineup.js";
 
 const TRADEABLE_POSITIONS = ["QB", "RB", "WR", "TE"];
-const MAX_TRADES_RETURNED = 20;
-// How much lineup value the other side is allowed to lose and still count as
-// a realistic ask — beyond this it's a lopsided trade nobody would accept.
-const MAX_ACCEPTABLE_OPPONENT_LOSS = 1.5;
+const TOP_TRADES_RETURNED = 3;
 
 function round1(n) {
   return Math.round(n * 10) / 10;
@@ -40,13 +40,9 @@ function summarizeForTrade(p) {
   };
 }
 
-function buildReason(give, get, myDelta, theirDelta, theirTeamName) {
+function buildReason(give, get, myDelta) {
   const upgradeNote = get.matchupNote ? `, ${get.matchupNote}` : "";
-  const fairness =
-    theirDelta >= 0
-      ? `also nets ${theirTeamName} a lineup upgrade — a realistic win-win`
-      : `costs ${theirTeamName} only ${Math.abs(theirDelta)} lineup pts — plausible if they value a different need`;
-  return `${get.name} projects a +${myDelta} pt lineup gain for you${upgradeNote}; ${fairness}.`;
+  return `${get.name} projects a +${myDelta} pt lineup gain over ${give.name}${upgradeNote}.`;
 }
 
 function buildTradeAnalysis({ roster, otherTeams, rosterSlots, opponents, rankings, unitHealth, weeksHistory }) {
@@ -54,39 +50,41 @@ function buildTradeAnalysis({ roster, otherTeams, rosterSlots, opponents, rankin
   const myBaseline = lineupTotal(myScored, rosterSlots);
   const myCandidates = myScored.filter((p) => TRADEABLE_POSITIONS.includes(p.position));
 
-  const trades = [];
-  for (const team of otherTeams || []) {
-    const theirScored = team.roster.map((p) => scorePlayer(p, opponents, rankings, unitHealth, weeksHistory));
-    const theirBaseline = lineupTotal(theirScored, rosterSlots);
-    const theirCandidates = theirScored.filter((p) => TRADEABLE_POSITIONS.includes(p.position));
+  // Every tradeable player rostered by every other team, pooled together —
+  // we're building a target list from the whole league, not a per-team offer.
+  const leaguePool = (otherTeams || [])
+    .flatMap((team) => team.roster)
+    .map((p) => scorePlayer(p, opponents, rankings, unitHealth, weeksHistory))
+    .filter((p) => TRADEABLE_POSITIONS.includes(p.position));
 
-    for (const give of myCandidates) {
-      const myRosterWithoutGive = myScored.filter((p) => p.id !== give.id);
-      for (const get of theirCandidates) {
-        if (get.position !== give.position) continue;
+  // Best (give, get) pairing per target player, keyed by the target's id, so
+  // the same incoming player can't crowd the top 3 out with duplicates.
+  const bestByTarget = new Map();
+  for (const give of myCandidates) {
+    const myRosterWithoutGive = myScored.filter((p) => p.id !== give.id);
+    for (const get of leaguePool) {
+      if (get.position !== give.position) continue;
 
-        const myDelta = round1(lineupTotal([...myRosterWithoutGive, get], rosterSlots) - myBaseline);
-        if (myDelta <= 0) continue; // only surface trades that are actual upgrades for me
+      const myDelta = round1(lineupTotal([...myRosterWithoutGive, get], rosterSlots) - myBaseline);
+      if (myDelta <= 0) continue; // only surface trades that are actual upgrades for me
 
-        const theirRosterWithoutGet = theirScored.filter((p) => p.id !== get.id);
-        const theirDelta = round1(lineupTotal([...theirRosterWithoutGet, give], rosterSlots) - theirBaseline);
-        if (theirDelta < -MAX_ACCEPTABLE_OPPONENT_LOSS) continue; // too lopsided to be realistic
-
-        trades.push({
-          withTeam: team.teamName,
+      const existing = bestByTarget.get(get.id);
+      if (!existing || myDelta > existing.myLineupDelta) {
+        bestByTarget.set(get.id, {
           give: summarizeForTrade(give),
           receive: summarizeForTrade(get),
           myLineupDelta: myDelta,
-          theirLineupDelta: theirDelta,
-          reason: buildReason(give, get, myDelta, theirDelta, team.teamName),
+          reason: buildReason(give, get, myDelta),
         });
       }
     }
   }
 
-  trades.sort((a, b) => b.myLineupDelta - a.myLineupDelta);
-  const allTrades = trades.slice(0, MAX_TRADES_RETURNED);
-  return { topTrades: allTrades.slice(0, 3), allTrades };
+  const topTrades = [...bestByTarget.values()]
+    .sort((a, b) => b.myLineupDelta - a.myLineupDelta)
+    .slice(0, TOP_TRADES_RETURNED);
+
+  return { topTrades };
 }
 
 export { buildTradeAnalysis };
