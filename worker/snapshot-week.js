@@ -1,36 +1,32 @@
-// Scheduled function (see netlify.toml) — runs weekly, after Monday Night
+// Scheduled Worker (see wrangler.toml) — runs weekly, after Monday Night
 // Football, and finalizes the just-completed week's actual-vs-projected
-// results into Netlify Blobs so fantasy.html can show trends over time.
+// results into KV so fantasy.html can show trends over time.
+//
+// This is a standalone Worker, not a Pages Function, because Cloudflare
+// Pages Functions don't support Cron Triggers — only Workers do. It shares
+// its logic with the Pages Function via relative imports into ../functions/lib.
 
-const { connectLambda } = require("@netlify/blobs");
-const { getLeagueRosterAndSettings, getStatsForWeek } = require("./lib/espn.js");
-const { isWeekComplete } = require("./lib/schedule.js");
-const { hasWeek, recordWeek } = require("./lib/history.js");
+import { getLeagueRosterAndSettings, getStatsForWeek } from "../functions/lib/espn.js";
+import { isWeekComplete } from "../functions/lib/schedule.js";
+import { hasWeek, recordWeek } from "../functions/lib/history.js";
 
 function currentSeason() {
   const now = new Date();
   return now.getUTCMonth() >= 2 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
-exports.handler = async (event) => {
-  try {
-    connectLambda(event);
-  } catch (err) {
-    console.error("snapshot-week: connectLambda failed:", err.message);
-    return { statusCode: 500 };
-  }
-
+async function run(env) {
   const cfg = {
-    season: process.env.ESPN_SEASON || String(currentSeason()),
-    leagueId: process.env.ESPN_LEAGUE_ID,
-    teamId: process.env.ESPN_TEAM_ID,
-    espnS2: process.env.ESPN_S2,
-    swid: process.env.ESPN_SWID,
+    season: env.ESPN_SEASON || String(currentSeason()),
+    leagueId: env.ESPN_LEAGUE_ID,
+    teamId: env.ESPN_TEAM_ID,
+    espnS2: env.ESPN_S2,
+    swid: env.ESPN_SWID,
   };
 
   if (["leagueId", "teamId", "espnS2", "swid"].some((k) => !cfg[k])) {
     console.log("snapshot-week: missing ESPN env vars, skipping");
-    return { statusCode: 200 };
+    return;
   }
 
   try {
@@ -39,18 +35,18 @@ exports.handler = async (event) => {
 
     if (targetWeek < 1) {
       console.log(`snapshot-week: week ${currentWeek} is the first week, nothing to finalize yet`);
-      return { statusCode: 200 };
+      return;
     }
 
-    if (await hasWeek(targetWeek)) {
+    if (await hasWeek(env.HISTORY_KV, targetWeek)) {
       console.log(`snapshot-week: week ${targetWeek} already recorded, skipping`);
-      return { statusCode: 200 };
+      return;
     }
 
     const complete = await isWeekComplete(targetWeek, Number(season));
     if (!complete) {
       console.log(`snapshot-week: week ${targetWeek} not fully complete yet, skipping`);
-      return { statusCode: 200 };
+      return;
     }
 
     const players = roster.map((p) => {
@@ -65,15 +61,25 @@ exports.handler = async (event) => {
       };
     });
 
-    const wrote = await recordWeek(targetWeek, players);
+    const wrote = await recordWeek(env.HISTORY_KV, targetWeek, players);
     console.log(
       wrote
         ? `snapshot-week: recorded week ${targetWeek} for ${players.length} players`
         : `snapshot-week: week ${targetWeek} was recorded concurrently, skipped`
     );
-    return { statusCode: 200 };
   } catch (err) {
     console.error("snapshot-week failed:", err.message);
-    return { statusCode: 500 };
   }
+}
+
+export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(run(env));
+  },
+  // lets `wrangler dev --test-scheduled` (or a stray HTTP request) trigger a
+  // manual run without waiting for Tuesday.
+  async fetch(request, env) {
+    await run(env);
+    return new Response("snapshot-week ran\n");
+  },
 };

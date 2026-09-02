@@ -1,5 +1,5 @@
-const { getDvpRank } = require("./defense.js");
-const { playerHistoryFromWeeks } = require("./history.js");
+import { getDvpRank } from "./defense.js";
+import { playerHistoryFromWeeks } from "./history.js";
 
 const STARTER_LOGIC_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"];
 
@@ -532,4 +532,4 @@ function summarizePlayer(p) {
   };
 }
 
-module.exports = { buildAnalysis };
+export { buildAnalysis, scorePlayer, buildOptimalLineup, summarizePlayer };

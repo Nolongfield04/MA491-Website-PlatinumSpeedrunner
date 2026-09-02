@@ -76,4 +76,4 @@ async function isWeekComplete(week, season) {
   return events.every((e) => e.competitions?.[0]?.status?.type?.completed === true);
 }
 
-module.exports = { getWeekOpponents, isWeekComplete };
+export { getWeekOpponents, isWeekComplete };

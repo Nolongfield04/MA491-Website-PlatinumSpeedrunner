@@ -155,7 +155,18 @@ async function getLeagueRosterAndSettings(cfg) {
 
   const opponent = getWeekMatchup(data, team.id, week);
 
-  return { week, season: cfg.season, roster, rosterSlots, teamName: team.name, opponent };
+  // Every other team's roster, straight from the same `data.teams` payload
+  // already fetched above — no second request needed. Feeds the trade
+  // analyzer (lib/tradeanalyzer.js).
+  const otherTeams = (data.teams || [])
+    .filter((t) => t.id !== team.id)
+    .map((t) => ({
+      teamId: t.id,
+      teamName: t.name,
+      roster: (t.roster?.entries || []).map((entry) => normalizePlayer(entry, week)),
+    }));
+
+  return { week, season: cfg.season, roster, rosterSlots, teamName: team.name, opponent, otherTeams };
 }
 
 async function getFreeAgents(cfg, week) {
@@ -172,7 +183,7 @@ async function getFreeAgents(cfg, week) {
   return (data.players || []).map((entry) => normalizePlayer(entry, week));
 }
 
-module.exports = {
+export {
   getLeagueRosterAndSettings,
   getFreeAgents,
   positionName,

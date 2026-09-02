@@ -5,7 +5,7 @@
 //   - target share / air yards share (WR/TE)
 //   - expected fantasy points (xFP) vs. actual, as a regression signal
 
-const { fetchSeasonStats } = require("./defense.js");
+import { fetchSeasonStats } from "./defense.js";
 
 const ESPN_TO_NFLVERSE = { LAR: "LA", WSH: "WAS" };
 function toNflverseAbbr(espnAbbr) {
@@ -180,4 +180,4 @@ function round1(n) {
   return Math.round(n * 10) / 10;
 }
 
-module.exports = { getOpportunityTrend };
+export { getOpportunityTrend };

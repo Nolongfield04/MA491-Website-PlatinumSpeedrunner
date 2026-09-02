@@ -108,4 +108,4 @@ async function getWeatherForTeams(teamAbbrs, opponents) {
   return weather; // { [teamAbbr]: { tempF, windMph, precipChance, risk } }, dome/too-far-out teams simply absent
 }
 
-module.exports = { getWeatherForTeams, STADIUMS };
+export { getWeatherForTeams, STADIUMS };

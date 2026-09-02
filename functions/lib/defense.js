@@ -291,4 +291,4 @@ function getDvpRank(rankings, espnProTeamAbbr, position) {
   };
 }
 
-module.exports = { getDefenseRankings, getDvpRank, fetchSeasonStats };
+export { getDefenseRankings, getDvpRank, fetchSeasonStats };

@@ -128,6 +128,14 @@
     .trend-up { background: rgba(47, 125, 79, 0.14); color: #2f7d4f; }
     .trend-down { background: rgba(161, 89, 44, 0.14); color: var(--accent-2); }
     .trend-stable { background: rgba(110, 100, 85, 0.12); color: var(--text-dim); }
+
+    .trade-row .trade-teams { color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.3rem; }
+    .trade-row .trade-swap { margin-bottom: 0.3rem; }
+    .trade-details { margin-top: 0.75rem; }
+    .trade-details summary { cursor: pointer; color: var(--accent); font-weight: 600; padding: 0.4rem 0; }
+    .trade-details summary:hover { text-decoration: underline; }
+    .trade-more { margin-top: 0.75rem; }
+    .trade-more .change-row:first-child { margin-top: 0; }
   </style>
 </head>
 <body>
@@ -166,7 +174,7 @@
   </main>
 
   <footer>
-    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Netlify.
+    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Cloudflare Pages.
   </footer>
 
   <script>
@@ -323,6 +331,38 @@
       return wrap;
     }
 
+    function renderTradeRow(t) {
+      const row = el("div", { class: "change-row trade-row" });
+      row.appendChild(el("div", { class: "trade-teams", text: `Trade with ${t.withTeam}` }));
+      row.appendChild(el("div", { class: "trade-swap" }, [
+        el("strong", { text: `Give ${t.give.name}` }),
+        el("span", { class: "arrow", text: "for" }),
+        el("strong", { text: t.receive.name }),
+      ]));
+      row.appendChild(el("div", { class: "meta-row", text: t.reason }));
+      return row;
+    }
+
+    function renderTradeAnalyzer(tradeAnalyzer) {
+      const { topTrades = [], allTrades = [] } = tradeAnalyzer || {};
+      if (!topTrades.length) {
+        return el("p", { class: "placeholder", text: "No realistic trade upgrades found across the league this week." });
+      }
+      const wrap = el("div");
+      for (const t of topTrades) wrap.appendChild(renderTradeRow(t));
+
+      const rest = allTrades.slice(topTrades.length);
+      if (rest.length) {
+        const details = el("details", { class: "trade-details" });
+        details.appendChild(el("summary", { text: `Show all trade options (${allTrades.length} total)` }));
+        const more = el("div", { class: "trade-more" });
+        for (const t of rest) more.appendChild(renderTradeRow(t));
+        details.appendChild(more);
+        wrap.appendChild(details);
+      }
+      return wrap;
+    }
+
     function renderWeeklyMatchup(matchup) {
       if (!matchup || matchup.bye) {
         return el("p", { class: "placeholder", text: "You have a bye in the fantasy schedule this week — no head-to-head matchup." });
@@ -458,7 +498,7 @@
       const errorBox = document.getElementById("ff-error");
       const content = document.getElementById("ff-content");
       try {
-        const res = await fetch("/.netlify/functions/optimize");
+        const res = await fetch("/optimize");
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
 
@@ -489,6 +529,10 @@
 
         content.appendChild(el("h2", { text: "Waiver Targets" }));
         content.appendChild(renderWaivers(data.waiverTargets));
+
+        content.appendChild(el("h2", { text: "Trade Analyzer" }));
+        content.appendChild(el("p", { class: "meta-row", text: "Same-position, 1-for-1 trades ranked by your optimal-lineup point gain — filtered to trades the other team wouldn't obviously reject." }));
+        content.appendChild(renderTradeAnalyzer(data.tradeAnalyzer));
 
         content.appendChild(el("h2", { text: "Full Roster" }));
         content.appendChild(el("p", { class: "meta-row", text: "DVP column: raw rank / strength-of-schedule-adjusted rank (1 = most exploitable, higher = tougher)." }));

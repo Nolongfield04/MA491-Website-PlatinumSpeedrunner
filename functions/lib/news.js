@@ -44,4 +44,4 @@ async function getPlayerNews(rosterPlayers) {
   return matches.slice(0, 15);
 }
 
-module.exports = { getPlayerNews };
+export { getPlayerNews };

@@ -29,7 +29,7 @@
       <h3>Fantasy Football Lineup Optimizer</h3>
       <p>Connects to my ESPN Fantasy Football league via the ESPN Fantasy API to pull
         my roster, free agents, and injury statuses fresh on every page load via a
-        Netlify serverless function. Combines that with real historical
+        Cloudflare Pages Function. Combines that with real historical
         defense-vs-position performance data (nflverse) to build an
         opponent-adjusted scoring model. The model ranks every player on my
         roster and every available free agent at each position, then
@@ -37,7 +37,7 @@
         my expected points for that week's matchup. <a href="fantasy.html">Try it &rarr;</a></p>
       <div class="tag-list">
         <span class="tag">Node.js</span>
-        <span class="tag">Netlify Functions</span>
+        <span class="tag">Cloudflare Workers</span>
         <span class="tag">ESPN API</span>
         <span class="tag">nflverse</span>
         <span class="tag">Statistical Modeling</span>
@@ -64,7 +64,7 @@
   </main>
 
   <footer>
-    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Netlify.
+    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Cloudflare Pages.
   </footer>
 
   <script>

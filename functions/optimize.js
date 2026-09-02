@@ -1,14 +1,14 @@
-const { connectLambda } = require("@netlify/blobs");
-const { getLeagueRosterAndSettings, getFreeAgents } = require("./lib/espn.js");
-const { getWeekOpponents } = require("./lib/schedule.js");
-const { getDefenseRankings } = require("./lib/defense.js");
-const { getUnitHealth } = require("./lib/injuries.js");
-const { getPlayerNews } = require("./lib/news.js");
-const { getAllWeeks } = require("./lib/history.js");
-const { getOpportunityTrend } = require("./lib/trends.js");
-const { getSnapShareTrend } = require("./lib/snapshare.js");
-const { getWeatherForTeams } = require("./lib/weather.js");
-const { buildAnalysis } = require("./lib/lineup.js");
+import { getLeagueRosterAndSettings, getFreeAgents } from "./lib/espn.js";
+import { getWeekOpponents } from "./lib/schedule.js";
+import { getDefenseRankings } from "./lib/defense.js";
+import { getUnitHealth } from "./lib/injuries.js";
+import { getPlayerNews } from "./lib/news.js";
+import { getAllWeeks } from "./lib/history.js";
+import { getOpportunityTrend } from "./lib/trends.js";
+import { getSnapShareTrend } from "./lib/snapshare.js";
+import { getWeatherForTeams } from "./lib/weather.js";
+import { buildAnalysis } from "./lib/lineup.js";
+import { buildTradeAnalysis } from "./lib/tradeanalyzer.js";
 
 // News/injuries/history are enrichments layered on top of the core roster +
 // lineup logic — if any of them hiccup, the page should still work with
@@ -29,19 +29,13 @@ function currentSeason() {
   return now.getUTCMonth() >= 2 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
-exports.handler = async (event) => {
-  try {
-    connectLambda(event);
-  } catch (err) {
-    console.error("optimize: connectLambda failed, history will be unavailable:", err.message);
-  }
-
+export async function onRequestGet({ env }) {
   const cfg = {
-    season: process.env.ESPN_SEASON || String(currentSeason()),
-    leagueId: process.env.ESPN_LEAGUE_ID,
-    teamId: process.env.ESPN_TEAM_ID,
-    espnS2: process.env.ESPN_S2,
-    swid: process.env.ESPN_SWID,
+    season: env.ESPN_SEASON || String(currentSeason()),
+    leagueId: env.ESPN_LEAGUE_ID,
+    teamId: env.ESPN_TEAM_ID,
+    espnS2: env.ESPN_S2,
+    swid: env.ESPN_SWID,
   };
 
   const missing = ["leagueId", "teamId", "espnS2", "swid"].filter((k) => !cfg[k]);
@@ -49,19 +43,19 @@ exports.handler = async (event) => {
     return jsonResponse(500, {
       error: `Missing required environment variable(s): ${missing
         .map((k) => envVarName(k))
-        .join(", ")}. Set these in the Netlify site's environment variables.`,
+        .join(", ")}. Set these in the Cloudflare Pages project's environment variables.`,
     });
   }
 
   try {
-    const { week, season, roster, rosterSlots, teamName, opponent } = await getLeagueRosterAndSettings(cfg);
+    const { week, season, roster, rosterSlots, teamName, opponent, otherTeams } = await getLeagueRosterAndSettings(cfg);
     const [freeAgents, opponents, defense, unitHealth, news, weeksHistory, opportunityTrends] = await Promise.all([
       getFreeAgents(cfg, week),
       getWeekOpponents(week, season),
       getDefenseRankings(Number(season)),
       bestEffort(getUnitHealth(), {}, "unit injury health"),
       bestEffort(getPlayerNews(roster), [], "player news"),
-      bestEffort(getAllWeeks(), [], "weekly history"),
+      bestEffort(getAllWeeks(env.HISTORY_KV), [], "weekly history"),
       bestEffort(getOpportunityTrend(roster, Number(season)), {}, "opportunity trend"),
     ]);
 
@@ -91,13 +85,31 @@ exports.handler = async (event) => {
       weather,
     });
 
-    return jsonResponse(200, { teamName, ...analysis, generatedAt: new Date().toISOString() });
+    // Enrichment, not core — if the trade sweep throws, the rest of the page
+    // should still render.
+    let tradeAnalyzer;
+    try {
+      tradeAnalyzer = buildTradeAnalysis({
+        roster,
+        otherTeams,
+        rosterSlots,
+        opponents,
+        rankings: defense.rankings,
+        unitHealth,
+        weeksHistory,
+      });
+    } catch (err) {
+      console.error("optimize: trade analyzer failed, continuing without it:", err.message);
+      tradeAnalyzer = { topTrades: [], allTrades: [] };
+    }
+
+    return jsonResponse(200, { teamName, ...analysis, tradeAnalyzer, generatedAt: new Date().toISOString() });
   } catch (err) {
     return jsonResponse(err.status === 401 || err.status === 403 ? 401 : 500, {
       error: err.message || "Unexpected error building fantasy analysis.",
     });
   }
-};
+}
 
 function envVarName(key) {
   return {
@@ -108,13 +120,12 @@ function envVarName(key) {
   }[key];
 }
 
-function jsonResponse(statusCode, body) {
-  return {
-    statusCode,
+function jsonResponse(status, body) {
+  return new Response(JSON.stringify(body), {
+    status,
     headers: {
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
     },
-    body: JSON.stringify(body),
-  };
+  });
 }

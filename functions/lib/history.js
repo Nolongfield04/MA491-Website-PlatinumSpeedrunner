@@ -1,39 +1,33 @@
-// Cross-week tracking, backed by Netlify Blobs. Each finalized week is
-// stored once (idempotent — set with onlyIfNew) as a small JSON snapshot of
-// that week's roster: projected vs. actual points per player.
+// Cross-week tracking, backed by Cloudflare KV (bound as HISTORY_KV). Each
+// finalized week is stored once as a small JSON snapshot of that week's
+// roster: projected vs. actual points per player.
 
-const { getStore } = require("@netlify/blobs");
-
-const STORE_NAME = "fantasy-history";
-
-function store() {
-  return getStore(STORE_NAME);
-}
+const KEY_PREFIX = "week-";
 
 function weekKey(week) {
-  return `week-${String(week).padStart(2, "0")}`;
+  return `${KEY_PREFIX}${String(week).padStart(2, "0")}`;
 }
 
-async function hasWeek(week) {
-  const existing = await store().get(weekKey(week), { type: "json" });
+async function hasWeek(kv, week) {
+  const existing = await kv.get(weekKey(week), { type: "json" });
   return existing != null;
 }
 
 // players: [{ id, name, position, proTeam, opponent, projectedPoints, actualPoints, dvpRank }]
-async function recordWeek(week, players) {
-  const result = await store().set(
-    weekKey(week),
-    JSON.stringify({ week, recordedAt: new Date().toISOString(), players }),
-    { onlyIfNew: true }
-  );
-  return result.modified; // false if a snapshot for this week already existed
+// KV has no atomic "only if new" write (unlike Netlify Blobs' `onlyIfNew`) —
+// this check-then-put leaves a small race window between two concurrent
+// invocations, acceptable for a once-a-week scheduled job.
+async function recordWeek(kv, week, players) {
+  const key = weekKey(week);
+  const existing = await kv.get(key);
+  if (existing != null) return false; // a snapshot for this week already existed
+  await kv.put(key, JSON.stringify({ week, recordedAt: new Date().toISOString(), players }));
+  return true;
 }
 
-async function getAllWeeks() {
-  const { blobs } = await store().list({ prefix: "week-" });
-  const weeks = await Promise.all(
-    blobs.map((b) => store().get(b.key, { type: "json" }))
-  );
+async function getAllWeeks(kv) {
+  const { keys } = await kv.list({ prefix: KEY_PREFIX });
+  const weeks = await Promise.all(keys.map((k) => kv.get(k.name, { type: "json" })));
   return weeks.filter(Boolean).sort((a, b) => a.week - b.week);
 }
 
@@ -72,4 +66,4 @@ function round1(n) {
   return Math.round(n * 10) / 10;
 }
 
-module.exports = { hasWeek, recordWeek, getAllWeeks, playerHistoryFromWeeks };
+export { hasWeek, recordWeek, getAllWeeks, playerHistoryFromWeeks };
