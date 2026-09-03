@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ma491-website-platinumspeedrunner",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-02",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "HISTORY_KV",
+      "id": "3c4ba0b7387941aa8dd61444fcf9be39"
+    }
+  ]
+}

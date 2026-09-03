@@ -7,4 +7,4 @@ crons = ["0 14 * * 2"]
 
 [[kv_namespaces]]
 binding = "HISTORY_KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "3c4ba0b7387941aa8dd61444fcf9be39"
