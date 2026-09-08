@@ -1,9 +1,11 @@
 // Resolves each NFL team's opponent for a given week, via ESPN's public
 // (no-auth) scoreboard endpoint.
 
+import { ESPN_SITE_HEADERS } from "./espnsite.js";
+
 async function getWeekOpponents(week, season) {
   const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&year=${season}`;
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  const res = await fetch(url, { headers: ESPN_SITE_HEADERS });
   if (!res.ok) {
     throw new Error(`ESPN scoreboard request failed (${res.status})`);
   }
@@ -66,7 +68,7 @@ function round1(n) {
 
 async function isWeekComplete(week, season) {
   const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&year=${season}`;
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  const res = await fetch(url, { headers: ESPN_SITE_HEADERS });
   if (!res.ok) {
     throw new Error(`ESPN scoreboard request failed (${res.status})`);
   }

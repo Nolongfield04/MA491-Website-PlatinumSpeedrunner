@@ -1,6 +1,8 @@
 // Matches ESPN's public NFL news feed against roster player names, so the
 // page can surface only news relevant to a start/sit decision this week.
 
+import { ESPN_SITE_HEADERS } from "./espnsite.js";
+
 function lastName(fullName) {
   const parts = fullName.trim().split(/\s+/);
   return parts[parts.length - 1].toLowerCase();
@@ -8,7 +10,7 @@ function lastName(fullName) {
 
 async function getPlayerNews(rosterPlayers) {
   const res = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=50", {
-    headers: { Accept: "application/json" },
+    headers: ESPN_SITE_HEADERS,
   });
   if (!res.ok) {
     throw new Error(`ESPN news request failed (${res.status})`);

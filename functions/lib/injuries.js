@@ -3,6 +3,8 @@
 // fantasy player pool — includes non-fantasy positions like OT/G/C, so it's
 // the only free source for offensive/defensive line health.
 
+import { ESPN_SITE_HEADERS } from "./espnsite.js";
+
 const OL_POSITIONS = new Set(["OT", "T", "G", "C", "OL"]);
 const DL_POSITIONS = new Set(["DE", "DT", "NT", "DL"]);
 const SECONDARY_POSITIONS = new Set(["CB", "S", "SS", "FS", "DB"]);
@@ -28,7 +30,7 @@ function unitFor(positionAbbr) {
 
 async function getUnitHealth() {
   const res = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries", {
-    headers: { Accept: "application/json" },
+    headers: ESPN_SITE_HEADERS,
   });
   if (!res.ok) {
     throw new Error(`ESPN injuries request failed (${res.status})`);
