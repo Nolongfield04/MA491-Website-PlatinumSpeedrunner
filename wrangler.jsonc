@@ -3,7 +3,7 @@
   "name": "ma491-website-platinumspeedrunner",
   "main": "worker.js",
   "compatibility_date": "2026-09-02",
-  "workers_dev": false,
+  "workers_dev": true,
   "preview_urls": false,
   "observability": {
     "enabled": true
