@@ -31,11 +31,11 @@ function currentSeason() {
 
 export async function onRequestGet({ env }) {
   const cfg = {
-    season: env.ESPN_SEASON || String(currentSeason()),
-    leagueId: env.ESPN_LEAGUE_ID,
-    teamId: env.ESPN_TEAM_ID,
-    espnS2: env.ESPN_S2,
-    swid: env.ESPN_SWID,
+    season: (env.ESPN_SEASON || String(currentSeason())).trim(),
+    leagueId: env.ESPN_LEAGUE_ID?.trim(),
+    teamId: env.ESPN_TEAM_ID?.trim(),
+    espnS2: env.ESPN_S2?.trim(),
+    swid: env.ESPN_SWID?.trim(),
   };
 
   const missing = ["leagueId", "teamId", "espnS2", "swid"].filter((k) => !cfg[k]);
