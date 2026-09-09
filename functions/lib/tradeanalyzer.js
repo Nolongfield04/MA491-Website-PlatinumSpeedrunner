@@ -1,25 +1,29 @@
 // Recommended trades: for each other team in the league, finds a trade that
 // (a) fills a spot in THEIR actual current starting lineup with one of my
 // players who's a real upgrade there, (b) fills a spot in MY actual starting
-// lineup in return, and (c) trades comparable value both ways — so a
-// bench-caliber player never gets floated for a league-winning one just
-// because it happens to help my lineup this week. Needs are read off each
-// team's real ESPN-set lineup (lineupSlotId), not a recomputed "optimal"
-// lineup for them — a trade target has to be someone THEY'D actually bench,
-// or it wouldn't move the needle for that manager at all. Prefers giving up
-// bench players of mine over anything in my own starting lineup, only
-// reaching into my starters if that's what it takes to make the trade fair.
+// lineup in return, and (c) never has me giving up more value than I get.
+// Needs are read off each team's real ESPN-set lineup (lineupSlotId), not a
+// recomputed "optimal" lineup for them — a trade target has to be someone
+// THEY'D actually bench, or it wouldn't move the needle for that manager at
+// all. Two hard rules, not just preferences: every player I offer up comes
+// from my bench, never my current starting lineup — if my bench can't put
+// together a fair package for a given team, no trade is proposed for that
+// team at all, rather than reaching into a starter — and the total value I
+// receive must be at least what I give up, in the same raw season-point
+// terms shown on the page.
 //
-// "Value" here isn't just a player's raw season point total: a starter at a
-// thin position (where the waiver wire has nothing close) commands a premium
-// over that raw number, and a package where one side is giving up multiple
-// players is expected to skew a bit in that side's favor (bundling assets
-// has its own cost, separate from the raw points). When a single-for-single
-// swap doesn't clear the fairness bar, a smaller "throw-in" piece is added
-// to whichever side is light, same as how real trades get balanced. This is
-// a snapshot signal for the current week, not a season-long dynasty
-// calculator, though the underlying player values update as ESPN's own
-// season-long projections do through the year.
+// "Value" for the fairness math isn't just a player's raw season point
+// total, though: a starter at a thin position (where the waiver wire has
+// nothing close) commands a premium over that raw number, and a package
+// where I'm sending multiple players is expected to net me a bit more, not
+// just parity (bundling assets has its own cost, separate from the raw
+// points) — that internal math still has to clear the hard "never lose
+// value" floor above it, though. When a single-for-single swap doesn't
+// clear the fairness bar, a smaller "throw-in" piece is added to whichever
+// side is light, same as how real trades get balanced. This is a snapshot
+// signal for the current week, not a season-long dynasty calculator, though
+// the underlying player values update as ESPN's own season-long projections
+// do through the year.
 
 import { scorePlayer, buildOptimalLineup, currentStarters } from "./lineup.js";
 
@@ -238,12 +242,11 @@ function buildTradeAnalysis({ roster, otherTeams, freeAgents, rosterSlots, seaso
   const myBaseline = lineupTotal(myScored, rosterSlots);
   const myNeeds = computeTeamNeeds(myScored);
   const myNeedPositions = new Set(myNeeds.slice(0, NEEDIEST_POSITIONS_PER_TEAM).map((n) => n.position));
-  const myCandidates = myScored.filter((p) => TRADEABLE_POSITIONS.includes(p.position));
   const myStarterIds = new Set(currentStarters(myScored).map((p) => p.id));
-  const givesOnlyBench = (giveList) => giveList.every((p) => !myStarterIds.has(p.id));
-  // Bench-only packages always beat ones that touch my starting lineup,
-  // regardless of lineup delta; only compare delta within the same tier.
-  const isBetterCandidate = (a, b) => (a.benchOnly !== b.benchOnly ? a.benchOnly : a.myLineupDelta > b.myLineupDelta);
+  // Hard rule, not just a preference: never offer up anything in my current
+  // starting lineup. Both the anchor and any throw-in are drawn from this
+  // bench-only pool, so a starter can't slip in either way.
+  const myBenchCandidates = myScored.filter((p) => TRADEABLE_POSITIONS.includes(p.position) && !myStarterIds.has(p.id));
 
   const bestPerTeam = [];
   for (const team of otherTeams || []) {
@@ -255,7 +258,7 @@ function buildTradeAnalysis({ roster, otherTeams, freeAgents, rosterSlots, seaso
     const theirCandidates = theirScored.filter((p) => TRADEABLE_POSITIONS.includes(p.position));
 
     let best = null;
-    for (const giveAnchor of myCandidates) {
+    for (const giveAnchor of myBenchCandidates) {
       if (!theirNeedPositions.has(giveAnchor.position)) continue; // not a position this team is looking to upgrade
       const theirNeed = theirNeedByPosition.get(giveAnchor.position);
       if (giveAnchor.tradeValue < theirNeed.weakestValue + MIN_UPGRADE_MARGIN) continue; // not a real upgrade for them
@@ -263,20 +266,21 @@ function buildTradeAnalysis({ roster, otherTeams, freeAgents, rosterSlots, seaso
       for (const getAnchor of theirCandidates) {
         if (!myNeedPositions.has(getAnchor.position)) continue; // only chase players at positions I actually need
 
-        const pkg = buildBalancedPackage({ giveAnchor, getAnchor, myPool: myCandidates, theirPool: theirCandidates });
+        const pkg = buildBalancedPackage({ giveAnchor, getAnchor, myPool: myBenchCandidates, theirPool: theirCandidates });
         if (!pkg) continue;
+
+        const giveValue = round1(pkg.giveList.reduce((s, p) => s + p.tradeValue, 0));
+        const getValue = round1(pkg.getList.reduce((s, p) => s + p.tradeValue, 0));
+        if (getValue < giveValue) continue; // never surface a trade where you give up more raw value than you receive
 
         const giveIds = new Set(pkg.giveList.map((p) => p.id));
         const myRosterWithoutGives = myScored.filter((p) => !giveIds.has(p.id));
         const myDelta = round1(lineupTotal([...myRosterWithoutGives, ...pkg.getList], rosterSlots) - myBaseline);
         if (myDelta <= 0) continue; // only surface trades that are actual upgrades for me
 
-        const candidate = { myLineupDelta: myDelta, benchOnly: givesOnlyBench(pkg.giveList) };
-        if (!best || isBetterCandidate(candidate, best)) {
-          const giveValue = round1(pkg.giveList.reduce((s, p) => s + p.tradeValue, 0));
-          const getValue = round1(pkg.getList.reduce((s, p) => s + p.tradeValue, 0));
+        if (!best || myDelta > best.myLineupDelta) {
           best = {
-            ...candidate,
+            myLineupDelta: myDelta,
             team: team.teamName,
             give: pkg.giveList.map(summarizeForTrade),
             receive: pkg.getList.map(summarizeForTrade),
