@@ -130,6 +130,7 @@
     .trend-stable { background: rgba(110, 100, 85, 0.12); color: var(--text-dim); }
 
     .trade-row .trade-swap { margin-bottom: 0.3rem; }
+    .trade-team { font-size: 0.78rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.4rem; }
   </style>
 </head>
 <body>
@@ -327,6 +328,7 @@
 
     function renderTradeRow(t) {
       const row = el("div", { class: "change-row trade-row" });
+      if (t.team) row.appendChild(el("div", { class: "trade-team", text: `Proposal to ${t.team}` }));
       row.appendChild(el("div", { class: "trade-swap" }, [
         el("strong", { text: `Give ${t.give.name}` }),
         el("span", { class: "arrow", text: "for" }),
@@ -514,7 +516,7 @@
         content.appendChild(renderWaivers(data.waiverTargets));
 
         content.appendChild(el("h2", { text: "Recommended Trades" }));
-        content.appendChild(el("p", { class: "meta-row", text: "Top 3 same-position targets from across the league, ranked by your optimal-lineup point gain." }));
+        content.appendChild(el("p", { class: "meta-row", text: "One realistic proposal per opposing team: targets their weakest starting spot with a player of comparable season-long value, and fills one of your own needs in return." }));
         content.appendChild(renderTradeAnalyzer(data.tradeAnalyzer));
 
         content.appendChild(el("h2", { text: "Full Roster" }));
