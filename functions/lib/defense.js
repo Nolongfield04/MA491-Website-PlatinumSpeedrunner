@@ -3,73 +3,15 @@
 // Real historical performance data — this is what makes the matchup
 // adjustment meaningful, since ESPN itself doesn't expose this.
 
+import { toNflverseAbbr, fetchNflverseCsv } from "./nflverse.js";
+
 const NFLVERSE_BASE =
   "https://github.com/nflverse/nflverse-data/releases/download/player_stats";
 
-// nflverse uses a couple of abbreviations that differ from ESPN's.
-const ESPN_TO_NFLVERSE = { LAR: "LA", WSH: "WAS" };
 const RANKED_POSITIONS = ["QB", "RB", "WR", "TE"];
 
-function toNflverseAbbr(espnAbbr) {
-  return ESPN_TO_NFLVERSE[espnAbbr] || espnAbbr;
-}
-
-// Minimal CSV parser that handles quoted fields (nflverse's headshot_url
-// column contains commas inside quotes).
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let field = "";
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += c;
-      }
-    } else if (c === '"') {
-      inQuotes = true;
-    } else if (c === ",") {
-      row.push(field);
-      field = "";
-    } else if (c === "\n" || c === "\r") {
-      if (c === "\r" && text[i + 1] === "\n") i++;
-      row.push(field);
-      field = "";
-      if (row.length > 1 || row[0] !== "") rows.push(row);
-      row = [];
-    } else {
-      field += c;
-    }
-  }
-  if (field !== "" || row.length) {
-    row.push(field);
-    rows.push(row);
-  }
-  const header = rows[0];
-  return rows.slice(1).map((r) => {
-    const obj = {};
-    header.forEach((h, i) => (obj[h] = r[i]));
-    return obj;
-  });
-}
-
 async function fetchSeasonStats(season) {
-  const res = await fetch(`${NFLVERSE_BASE}/player_stats_${season}.csv`);
-  if (!res.ok) {
-    const err = new Error(`nflverse data not available for season ${season} (${res.status})`);
-    err.status = res.status;
-    throw err;
-  }
-  const text = await res.text();
-  return parseCsv(text);
+  return fetchNflverseCsv(`${NFLVERSE_BASE}/player_stats_${season}.csv`);
 }
 
 // avgAllowed[position][team] = average PPR fantasy points allowed per game

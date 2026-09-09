@@ -1,81 +1,94 @@
-// Resolves each NFL team's opponent for a given week, via ESPN's public
-// (no-auth) scoreboard endpoint.
+// Resolves each NFL team's opponent, kickoff time, and Vegas line for a given
+// week. ESPN's public site.api.espn.com scoreboard 403s Cloudflare Workers'
+// traffic (its WAF appears to block Workers' shared egress IPs — confirmed
+// the exact same URL works fine from a non-Worker client), so this instead
+// uses nflverse's public schedule dataset, hosted on GitHub, which isn't
+// blocked and already backs the rest of this app's non-ESPN stats.
 
-import { ESPN_SITE_HEADERS } from "./espnsite.js";
+import { toEspnAbbr, fetchNflverseCsv } from "./nflverse.js";
 
-async function getWeekOpponents(week, season) {
-  const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&year=${season}`;
-  const res = await fetch(url, { headers: ESPN_SITE_HEADERS });
-  if (!res.ok) {
-    throw new Error(`ESPN scoreboard request failed (${res.status})`);
-  }
-  const data = await res.json();
+const GAMES_URL = "https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv";
 
-  const opponents = {};
-  for (const event of data.events || []) {
-    const competition = event.competitions?.[0];
-    if (!competition) continue;
-    const [a, b] = competition.competitors || [];
-    if (!a || !b) continue;
-    const abbrA = a.team?.abbreviation;
-    const abbrB = b.team?.abbreviation;
-    if (!abbrA || !abbrB) continue;
-
-    // odds[0].spread/overUnder are relative to the HOME team regardless of
-    // competitor array order — resolve which entry is home before computing
-    // implied totals and each team's OWN spread (negative = favored).
-    const odds = competition.odds?.[0];
-    let impliedByAbbr = {};
-    let ownSpreadByAbbr = {};
-    if (odds && typeof odds.overUnder === "number" && typeof odds.spread === "number") {
-      const home = a.homeAway === "home" ? a : b;
-      const away = home === a ? b : a;
-      const homeImplied = round1(odds.overUnder / 2 - odds.spread / 2);
-      const awayImplied = round1(odds.overUnder / 2 + odds.spread / 2);
-      impliedByAbbr = {
-        [home.team.abbreviation]: homeImplied,
-        [away.team.abbreviation]: awayImplied,
-      };
-      ownSpreadByAbbr = {
-        [home.team.abbreviation]: odds.spread,
-        [away.team.abbreviation]: -odds.spread,
-      };
-    }
-
-    opponents[abbrA] = {
-      opponent: abbrB,
-      isHome: a.homeAway === "home",
-      impliedTotal: impliedByAbbr[abbrA] ?? null,
-      overUnder: odds?.overUnder ?? null,
-      spread: ownSpreadByAbbr[abbrA] ?? null,
-      kickoffTime: event.date || null,
-    };
-    opponents[abbrB] = {
-      opponent: abbrA,
-      isHome: b.homeAway === "home",
-      impliedTotal: impliedByAbbr[abbrB] ?? null,
-      overUnder: odds?.overUnder ?? null,
-      spread: ownSpreadByAbbr[abbrB] ?? null,
-      kickoffTime: event.date || null,
-    };
-  }
-  return opponents; // { TEAM_ABBR: { opponent, isHome, impliedTotal, overUnder, spread } }, teams on bye are absent
+async function fetchWeekGames(week, season) {
+  const rows = await fetchNflverseCsv(GAMES_URL);
+  return rows.filter(
+    (r) => r.game_type === "REG" && Number(r.week) === Number(week) && Number(r.season) === Number(season)
+  );
 }
 
 function round1(n) {
   return Math.round(n * 10) / 10;
 }
 
-async function isWeekComplete(week, season) {
-  const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&year=${season}`;
-  const res = await fetch(url, { headers: ESPN_SITE_HEADERS });
-  if (!res.ok) {
-    throw new Error(`ESPN scoreboard request failed (${res.status})`);
+// US DST (since 2007) runs 2nd Sunday of March through 1st Sunday of
+// November; nflverse's gametime is Eastern local, and NFL games only ever
+// fall in that Sept-Feb window, so only the November edge really matters.
+function easternUtcOffsetHours(gamedayUtc) {
+  const y = gamedayUtc.getUTCFullYear();
+  const novFirst = new Date(Date.UTC(y, 10, 1));
+  const firstSundayNov = new Date(Date.UTC(y, 10, 1 + ((7 - novFirst.getUTCDay()) % 7)));
+  const marFirst = new Date(Date.UTC(y, 2, 1));
+  const secondSundayMar = new Date(Date.UTC(y, 2, 1 + ((7 - marFirst.getUTCDay()) % 7) + 7));
+  const isDst = gamedayUtc >= secondSundayMar && gamedayUtc < firstSundayNov;
+  return isDst ? 4 : 5; // hours Eastern is behind UTC
+}
+
+function kickoffToIso(gameday, gametime) {
+  if (!gameday || !gametime) return null;
+  const offset = easternUtcOffsetHours(new Date(`${gameday}T00:00:00Z`));
+  return `${gameday}T${gametime}:00-0${offset}:00`;
+}
+
+async function getWeekOpponents(week, season) {
+  const games = await fetchWeekGames(week, season);
+
+  const opponents = {};
+  for (const g of games) {
+    const homeAbbr = toEspnAbbr(g.home_team);
+    const awayAbbr = toEspnAbbr(g.away_team);
+    if (!homeAbbr || !awayAbbr) continue;
+
+    const overUnder = g.total_line !== "" ? parseFloat(g.total_line) : null;
+    // nflverse's spread_line is positive when the HOME team is favored;
+    // this app's convention (matching the old ESPN-derived odds.spread) is
+    // each team's OWN spread with negative = favored, so flip the sign for
+    // home and mirror it for away.
+    const homeOwnSpread = g.spread_line !== "" ? -parseFloat(g.spread_line) : null;
+    const awayOwnSpread = homeOwnSpread !== null ? -homeOwnSpread : null;
+
+    let homeImplied = null;
+    let awayImplied = null;
+    if (overUnder !== null && homeOwnSpread !== null) {
+      homeImplied = round1(overUnder / 2 - homeOwnSpread / 2);
+      awayImplied = round1(overUnder / 2 + homeOwnSpread / 2);
+    }
+
+    const kickoffTime = kickoffToIso(g.gameday, g.gametime);
+
+    opponents[homeAbbr] = {
+      opponent: awayAbbr,
+      isHome: true,
+      impliedTotal: homeImplied,
+      overUnder,
+      spread: homeOwnSpread,
+      kickoffTime,
+    };
+    opponents[awayAbbr] = {
+      opponent: homeAbbr,
+      isHome: false,
+      impliedTotal: awayImplied,
+      overUnder,
+      spread: awayOwnSpread,
+      kickoffTime,
+    };
   }
-  const data = await res.json();
-  const events = data.events || [];
-  if (events.length === 0) return false; // no schedule data yet — can't be "complete"
-  return events.every((e) => e.competitions?.[0]?.status?.type?.completed === true);
+  return opponents; // { TEAM_ABBR: { opponent, isHome, impliedTotal, overUnder, spread, kickoffTime } }, teams on bye are absent
+}
+
+async function isWeekComplete(week, season) {
+  const games = await fetchWeekGames(week, season);
+  if (games.length === 0) return false; // no schedule data yet — can't be "complete"
+  return games.every((g) => g.home_score !== "" && g.away_score !== "");
 }
 
 export { getWeekOpponents, isWeekComplete };
