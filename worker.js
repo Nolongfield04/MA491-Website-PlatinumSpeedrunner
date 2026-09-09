@@ -1,16 +1,9 @@
-import { onRequestGet as optimizeHandler } from "./functions/optimize.js";
-
-// Static assets (index.html, fantasy.html, style.css, images, ...) are
-// served directly by the assets binding and never reach this fetch handler
-// unless the path doesn't match a file — that's how /optimize gets here.
+// Static assets (index.html, style.css, images, ...) are served directly
+// by the assets binding. No custom routes anymore - the fantasy football
+// feature that used to live at /optimize moved to a self-hosted Node app
+// on the Raspberry Pi (see ~/fantasy_pi), linked from projects.html.
 export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-
-    if (url.pathname === "/optimize" && request.method === "GET") {
-      return optimizeHandler({ request, env, ctx });
-    }
-
+  async fetch(request, env) {
     return env.ASSETS.fetch(request);
   },
 };

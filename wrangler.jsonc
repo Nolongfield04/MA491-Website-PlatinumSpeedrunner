@@ -11,11 +11,5 @@
   "assets": {
     "directory": ".",
     "binding": "ASSETS"
-  },
-  "kv_namespaces": [
-    {
-      "binding": "HISTORY_KV",
-      "id": "3c4ba0b7387941aa8dd61444fcf9be39"
-    }
-  ]
+  }
 }

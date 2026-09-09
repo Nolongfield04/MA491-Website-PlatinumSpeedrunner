@@ -14,7 +14,6 @@
         <li><a href="index.html">About</a></li>
         <li><a href="resume.html">Resume</a></li>
         <li><a href="projects.html" class="active">Math Projects</a></li>
-        <li><a href="fantasy.html">Fantasy Football</a></li>
       </ul>
     </nav>
   </header>
@@ -28,15 +27,18 @@
       <span class="status done">Live</span>
       <h3>Self-Hosted Weather Station &amp; Landing Recreation Planner</h3>
       <p>A weather site running on a Raspberry Pi at home (Flask, cron,
-        NOAA + Open-Meteo APIs). Logs West Point, NY conditions daily,
-        shows a rolling history alongside a multi-day forecast, and
-        includes a "D-Day landing recreation" planner that scores upcoming
-        dates for an amphibious/airborne landing recreation by wave height
-        and moon phase &mdash; selectable across coastal military sites in
-        the US, Latin America, and Europe. Wave forecasts beyond the
-        marine model's ~9-day horizon are estimated from real prior-year
+        NOAA + Open-Meteo APIs). Tracks 5 cities (West Point NY, Houston TX,
+        Lampasas TX, Paris FR, Stowe VT) hourly, with a past-month history
+        view per city and a page to look up current conditions for any
+        other city in the world on demand. Also includes a "D-Day landing
+        recreation" planner that scores upcoming dates for an
+        amphibious/airborne landing recreation by wave height and moon
+        phase &mdash; selectable across coastal military sites in the US,
+        Latin America, and Europe. Wave forecasts beyond the marine
+        model's ~9-day horizon are estimated from real prior-year
         readings the site logs every day, building its own climatology
-        over time. <a href="https://math-pi-5.tailcd9c3b.ts.net" class="btn" target="_blank" rel="noopener">Visit the live site &rarr;</a></p>
+        over time.</p>
+      <a href="https://math-pi-5.tailcd9c3b.ts.net" class="btn" target="_blank" rel="noopener">Weather</a>
       <div class="tag-list">
         <span class="tag">Python</span>
         <span class="tag">Flask</span>
@@ -49,19 +51,43 @@
     </div>
 
     <div class="card">
-      <span class="status in-progress">In Progress</span>
+      <span class="status done">Live</span>
+      <h3>Golf Tee Time Advisor</h3>
+      <p>Search a golf course (or its nearest town), and it scores every
+        plausible tee time over the next 7 days &mdash; daylight hours
+        where an 18-hole round could finish before sunset &mdash; on rain
+        chance, wind speed, and temperature comfort. Thunderstorm risk or
+        wind gusts at/over 30mph are a hard safety cutoff, not just a
+        scoring penalty. Runs on the same Raspberry Pi as the weather
+        station, fetching live from Open-Meteo per search rather than a
+        fixed course list.</p>
+      <a href="https://math-pi-5.tailcd9c3b.ts.net/golf" class="btn" target="_blank" rel="noopener">Recommended Golf Tee Times</a>
+      <div class="tag-list">
+        <span class="tag">Python</span>
+        <span class="tag">Flask</span>
+        <span class="tag">Raspberry Pi</span>
+        <span class="tag">Open-Meteo API</span>
+        <span class="tag">Geocoding</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="status done">Live</span>
       <h3>Fantasy Football Lineup Optimizer</h3>
       <p>Connects to my ESPN Fantasy Football league via the ESPN Fantasy API to pull
-        my roster, free agents, and injury statuses fresh on every page load via a
-        Cloudflare Pages Function. Combines that with real historical
-        defense-vs-position performance data (nflverse) to build an
-        opponent-adjusted scoring model. The model ranks every player on my
-        roster and every available free agent at each position, then
-        recommends the starting lineup and any free-agent swaps that maximize
-        my expected points for that week's matchup. <a href="fantasy.html">Try it &rarr;</a></p>
+        my roster, free agents, and injury statuses fresh on every page load. Combines
+        that with real historical defense-vs-position performance data (nflverse) to
+        build an opponent-adjusted scoring model. The model ranks every player on my
+        roster and every available free agent at each position, then recommends the
+        starting lineup, waiver swaps, and realistic trades that maximize my expected
+        points &mdash; bench-only and never-lose-value are hard rules for trade
+        suggestions, not soft preferences. Self-hosted on the same Raspberry Pi as the
+        weather station and golf advisor.</p>
+      <a href="https://math-pi-5.tailcd9c3b.ts.net/fantasy" class="btn" target="_blank" rel="noopener">Fantasy Football</a>
       <div class="tag-list">
         <span class="tag">Node.js</span>
-        <span class="tag">Cloudflare Workers</span>
+        <span class="tag">Express</span>
+        <span class="tag">Raspberry Pi</span>
         <span class="tag">ESPN API</span>
         <span class="tag">nflverse</span>
         <span class="tag">Statistical Modeling</span>

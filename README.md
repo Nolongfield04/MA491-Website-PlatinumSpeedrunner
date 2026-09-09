@@ -1,40 +1,38 @@
 # platinumspeedrunner.dev
 
-Personal website — About, Resume, Math Projects, and a fantasy football
-lineup optimizer. Plain HTML/CSS/JS, no build step. Deployed via Cloudflare
-Pages from this GitHub repo.
+Personal website — About, Resume, and Math Projects. Plain HTML/CSS/JS, no
+build step. Deployed via Cloudflare Pages from this GitHub repo.
+
+The Math Projects page links out to a few tools that are self-hosted on a
+home Raspberry Pi instead of living in this repo — a weather station, a
+golf tee-time advisor, and a fantasy football lineup optimizer (moved here
+from a Cloudflare Pages Function; see below).
 
 ## Structure
 
 - `index.html` — About page
 - `resume.html` — Resume / accomplishments
-- `projects.html` — Math projects
-- `fantasy.html` — Fantasy football lineup optimizer (calls `/optimize`)
+- `projects.html` — Math projects, including links to the Pi-hosted tools
 - `style.css` — shared styles
-- `functions/optimize.js` + `functions/lib/` — Cloudflare Pages Function
-  backing `fantasy.html`: pulls the ESPN league roster, layers on matchup/
-  injury/weather/trend signals, and returns an optimized lineup, waiver
-  targets, and trade suggestions.
-- `worker/` — a separate Cloudflare Worker (Pages Functions don't support
-  Cron Triggers) that runs weekly to record each week's actual-vs-projected
-  results into KV, so `fantasy.html` can show player trend history.
+- `worker.js` — trivial Worker that just serves static assets (no custom
+  routes anymore)
 
 ## Local preview
 
-Open `index.html` directly in a browser, or serve the folder with any static
-file server. `functions/optimize.js` needs Cloudflare's runtime (KV binding,
-env vars) to run — use `npx wrangler pages dev .` for a local preview of the
-API, or just work on the static pages directly.
+Open `index.html` directly in a browser, or serve the folder with any
+static file server.
 
 ## Deploy
 
-- **Static site + `/optimize` API**: pushes to `main` auto-deploy via the
-  Cloudflare Pages project connected to this repo. Requires a `HISTORY_KV`
-  KV namespace bound in the Pages project settings, and the `ESPN_LEAGUE_ID`,
-  `ESPN_TEAM_ID`, `ESPN_S2`, `ESPN_SWID` (and optional `ESPN_SEASON`)
-  environment variables set there.
-- **Weekly snapshot job**: deployed separately from `worker/`, since it
-  changes rarely — `cd worker && npx wrangler deploy`, after setting the
-  same env vars as Worker secrets (`npx wrangler secret put ESPN_LEAGUE_ID`,
-  etc.) and pointing `wrangler.toml`'s KV namespace `id` at the same
-  namespace bound to the Pages project.
+Pushes to `main` auto-deploy via the Cloudflare Pages project connected to
+this repo (Workers Builds — no GitHub Actions workflow involved).
+
+## Fantasy football lineup optimizer moved to the Pi
+
+This used to run here as `fantasy.html` + `functions/optimize.js` +
+`functions/lib/` (a Cloudflare Pages Function) with a separate `worker/`
+Cron Trigger for weekly trend snapshots, backed by a `HISTORY_KV`
+namespace. All of that was retired in favor of a self-hosted version at
+`~/fantasy_pi` on the Pi (same analysis code, ported almost unchanged —
+see that project's README for why and how). If you're looking for the old
+Cloudflare-hosted version, check git history before this migration.
