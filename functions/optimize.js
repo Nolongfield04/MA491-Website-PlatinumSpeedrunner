@@ -92,7 +92,9 @@ export async function onRequestGet({ env }) {
       tradeAnalyzer = buildTradeAnalysis({
         roster,
         otherTeams,
+        freeAgents,
         rosterSlots,
+        season,
         opponents,
         rankings: defense.rankings,
         unitHealth,

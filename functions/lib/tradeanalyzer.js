@@ -1,18 +1,25 @@
 // Recommended trades: for each other team in the league, finds a trade that
 // (a) fills a spot in THEIR actual current starting lineup with one of my
 // players who's a real upgrade there, (b) fills a spot in MY actual starting
-// lineup in return, and (c) trades comparable season-long value both ways —
-// so a bench-caliber player never gets floated for a league-winning one just
+// lineup in return, and (c) trades comparable value both ways — so a
+// bench-caliber player never gets floated for a league-winning one just
 // because it happens to help my lineup this week. Needs are read off each
 // team's real ESPN-set lineup (lineupSlotId), not a recomputed "optimal"
 // lineup for them — a trade target has to be someone THEY'D actually bench,
 // or it wouldn't move the needle for that manager at all. Prefers giving up
 // bench players of mine over anything in my own starting lineup, only
 // reaching into my starters if that's what it takes to make the trade fair.
-// When a single-for-single swap doesn't clear the fairness bar, a smaller
-// "throw-in" piece is added to whichever side is light, same as how real
-// trades get balanced. This is a snapshot signal for the current week's
-// optimal lineup, not a season-long dynasty trade calculator.
+//
+// "Value" here isn't just a player's raw season point total: a starter at a
+// thin position (where the waiver wire has nothing close) commands a premium
+// over that raw number, and a package where one side is giving up multiple
+// players is expected to skew a bit in that side's favor (bundling assets
+// has its own cost, separate from the raw points). When a single-for-single
+// swap doesn't clear the fairness bar, a smaller "throw-in" piece is added
+// to whichever side is light, same as how real trades get balanced. This is
+// a snapshot signal for the current week, not a season-long dynasty
+// calculator, though the underlying player values update as ESPN's own
+// season-long projections do through the year.
 
 import { scorePlayer, buildOptimalLineup, currentStarters } from "./lineup.js";
 
@@ -23,6 +30,9 @@ const MIN_UPGRADE_MARGIN = 20; // season-point margin the anchor "give" must cle
 const FAIRNESS_MIN_ABSOLUTE = 20; // season-point slack allowed even for small-value players
 const FAIRNESS_MAX_ABSOLUTE = 55; // ...but never more than this, regardless of how big the players are
 const FAIRNESS_RELATIVE = 0.2; // the base allowance: this fraction of the larger side's value
+const STARTER_SCARCITY_RATE = 0.18; // fraction of a starter's above-waiver-replacement value counted as an extra "hard to replace" premium
+const REPLACEMENT_POOL_SIZE = 3; // average the top N free agents at a position to gauge how thin the waiver wire is there
+const MULTI_PLAYER_PREMIUM = 0.12; // the side sending MORE players in a package should net this much more value, not just parity
 
 function round1(n) {
   return Math.round(n * 10) / 10;
@@ -36,25 +46,58 @@ function lineupTotal(scoredRoster, rosterSlots) {
 // A player's own season-long worth, independent of this week's matchup —
 // ESPN's full-season projection (statSourceId 1 = projected, statSplitTypeId
 // 0 = season total, as opposed to a single week) blends actual-so-far with
-// rest-of-season outlook as the year progresses. This is what keeps the
-// analyzer from treating "helps my lineup this week" as the same thing as
-// "this player is actually worth that much" — Aaron Jones and Jahmyr Gibbs
-// might both have a fine Week 1 matchup, but their season totals aren't close.
-function seasonValue(p) {
-  const seasonEntry = (p.rawStats || []).find((s) => s.statSourceId === 1 && s.statSplitTypeId === 0);
+// rest-of-season outlook, and keeps updating as ESPN's model does through
+// the year — this is what keeps the analyzer from treating "helps my lineup
+// this week" as the same thing as "this player is actually worth that much."
+// Must also match the CURRENT season's seasonId: a player's stats array
+// carries entries from past seasons too, and without this filter `.find()`
+// can silently grab last year's season total instead of this year's.
+function seasonValue(p, season) {
+  const seasonEntry = (p.rawStats || []).find(
+    (s) => s.statSourceId === 1 && s.statSplitTypeId === 0 && Number(s.seasonId) === Number(season)
+  );
   if (seasonEntry && typeof seasonEntry.appliedTotal === "number") {
     return round1(seasonEntry.appliedTotal);
   }
-  // No ESPN season projection (rare — very deep waiver-wire players): fall
-  // back to ownership as a rough market-value proxy, scaled onto roughly the
-  // same axis as a season point total.
+  // No ESPN season projection for this year (rare — very deep waiver-wire
+  // players): fall back to ownership as a rough market-value proxy, scaled
+  // onto roughly the same axis as a season point total.
   return round1((p.percentOwned || 0) * 2.5);
 }
 
-function isFairTrade(giveValue, getValue) {
-  const base = Math.max(giveValue, getValue, 1);
-  const allowedGap = Math.min(FAIRNESS_MAX_ABSOLUTE, Math.max(FAIRNESS_MIN_ABSOLUTE, base * FAIRNESS_RELATIVE));
-  return Math.abs(giveValue - getValue) <= allowedGap;
+// Top-N free agents' average value at each position — a data-driven read on
+// how thin the waiver wire actually is in THIS league, rather than a
+// hardcoded assumption about which positions are generically scarce.
+function computeReplacementLevels(freeAgentsScored) {
+  const byPosition = {};
+  for (const position of TRADEABLE_POSITIONS) {
+    const top = freeAgentsScored
+      .filter((p) => p.position === position)
+      .sort((a, b) => b.tradeValue - a.tradeValue)
+      .slice(0, REPLACEMENT_POOL_SIZE);
+    byPosition[position] = top.length ? round1(top.reduce((s, p) => s + p.tradeValue, 0) / top.length) : 0;
+  }
+  return byPosition;
+}
+
+// The value actually used for fairness math: a bench/waiver-caliber player's
+// value is just their raw season points, but a player currently starting
+// gets bumped for how far above the position's waiver-replacement level they
+// sit — reflecting that letting go of a starter with no comparable fallback
+// available really does cost more than the raw points suggest.
+function fairnessValue(p, isStarter, replacementByPosition) {
+  if (!isStarter) return p.tradeValue;
+  const replacement = replacementByPosition[p.position] || 0;
+  const scarcityGap = Math.max(0, p.tradeValue - replacement);
+  return round1(p.tradeValue + scarcityGap * STARTER_SCARCITY_RATE);
+}
+
+function attachFairnessValues(scoredPlayers, replacementByPosition) {
+  const starterIds = new Set(currentStarters(scoredPlayers).map((p) => p.id));
+  return scoredPlayers.map((p) => ({
+    ...p,
+    fairnessVal: fairnessValue(p, starterIds.has(p.id), replacementByPosition),
+  }));
 }
 
 // Ranked by each ACTUAL starting position's weakest (lowest season-value)
@@ -74,42 +117,74 @@ function computeTeamNeeds(scoredRoster) {
   return needs.sort((a, b) => a.weakestValue - b.weakestValue);
 }
 
-// Smallest-gap filler from `pool` that brings `anchorValue` as close as
-// possible to `targetValue` — the "throw-in" that balances an otherwise
-// lopsided single-for-single swap, same as a real trade would.
-function bestThrowIn(pool, excludeIds, anchorValue, targetValue) {
+// How far off (getValue - giveValue) is from what's actually "fair" given
+// how many players are on each side. Equal headcounts target plain parity;
+// whichever side sends more players is expected to net a premium for
+// bundling assets together, not just an even split.
+function idealValueGap(giveValue, getValue, giveCount, getCount) {
+  if (giveCount === getCount) return 0;
+  const base = Math.max(giveValue, getValue, 1);
+  return giveCount > getCount ? base * MULTI_PLAYER_PREMIUM : -base * MULTI_PLAYER_PREMIUM;
+}
+
+function fairnessSlack(giveValue, getValue) {
+  const base = Math.max(giveValue, getValue, 1);
+  return Math.min(FAIRNESS_MAX_ABSOLUTE, Math.max(FAIRNESS_MIN_ABSOLUTE, base * FAIRNESS_RELATIVE));
+}
+
+function isFairTrade(giveValue, getValue, giveCount, getCount) {
+  const actualGap = getValue - giveValue;
+  const ideal = idealValueGap(giveValue, getValue, giveCount, getCount);
+  return Math.abs(actualGap - ideal) <= fairnessSlack(giveValue, getValue);
+}
+
+// Filler player (using fairness-adjusted value) whose addition to `anchorValue`
+// lands closest to the ideal give/get gap for the resulting package shape —
+// the "throw-in" that balances an otherwise lopsided single-for-single swap,
+// same as how real trades get sweetened.
+function bestThrowIn(pool, excludeIds, computeResultingGapFor) {
   let best = null;
   for (const p of pool) {
     if (excludeIds.has(p.id)) continue;
-    const gap = Math.abs(anchorValue + p.tradeValue - targetValue);
+    const gap = Math.abs(computeResultingGapFor(p.fairnessVal));
     if (!best || gap < best.gap) best = { player: p, gap };
   }
   return best?.player || null;
 }
 
 // Tries the anchor pair as a straight 1-for-1 first; if that's not fair,
-// adds one throw-in from whichever side is short on value. Returns null if
-// no combination (with at most one throw-in) clears the fairness bar.
+// adds one throw-in from whichever side is short on (fairness-adjusted)
+// value. Returns null if no combination (with at most one throw-in) clears
+// the fairness bar.
 function buildBalancedPackage({ giveAnchor, getAnchor, myPool, theirPool }) {
-  const anchorGive = giveAnchor.tradeValue;
-  const anchorGet = getAnchor.tradeValue;
+  const anchorGiveFair = giveAnchor.fairnessVal;
+  const anchorGetFair = getAnchor.fairnessVal;
 
-  if (isFairTrade(anchorGive, anchorGet)) {
+  if (isFairTrade(anchorGiveFair, anchorGetFair, 1, 1)) {
     return { giveList: [giveAnchor], getList: [getAnchor] };
   }
 
-  if (anchorGive < anchorGet) {
+  if (anchorGiveFair < anchorGetFair) {
     // I'm light on value — sweeten my side with a smaller piece of mine.
-    const throwIn = bestThrowIn(myPool, new Set([giveAnchor.id]), anchorGive, anchorGet);
-    if (throwIn && isFairTrade(anchorGive + throwIn.tradeValue, anchorGet)) {
+    // Adding a 2nd player to my side makes me the "multi" side, so the
+    // target isn't flat parity with their anchor — I should end up
+    // slightly light in raw value to account for the bundling premium.
+    const throwIn = bestThrowIn(myPool, new Set([giveAnchor.id]), (throwInFair) => {
+      const combinedGive = anchorGiveFair + throwInFair;
+      return combinedGive - anchorGetFair - idealValueGap(combinedGive, anchorGetFair, 2, 1);
+    });
+    if (throwIn && isFairTrade(anchorGiveFair + throwIn.fairnessVal, anchorGetFair, 2, 1)) {
       return { giveList: [giveAnchor, throwIn], getList: [getAnchor] };
     }
     return null;
   }
 
   // My anchor outweighs theirs — they sweeten their side instead.
-  const throwIn = bestThrowIn(theirPool, new Set([getAnchor.id]), anchorGet, anchorGive);
-  if (throwIn && isFairTrade(anchorGive, anchorGet + throwIn.tradeValue)) {
+  const throwIn = bestThrowIn(theirPool, new Set([getAnchor.id]), (throwInFair) => {
+    const combinedGet = anchorGetFair + throwInFair;
+    return combinedGet - anchorGiveFair - idealValueGap(anchorGiveFair, combinedGet, 1, 2);
+  });
+  if (throwIn && isFairTrade(anchorGiveFair, anchorGetFair + throwIn.fairnessVal, 1, 2)) {
     return { giveList: [giveAnchor], getList: [getAnchor, throwIn] };
   }
   return null;
@@ -143,7 +218,7 @@ function buildReason({ teamName, giveList, getList, giveValue, getValue, theirNe
     : "";
   const packageNote =
     giveList.length > 1 || getList.length > 1
-      ? ` Structured as a ${giveList.length}-for-${getList.length} to balance value.`
+      ? ` Structured as a ${giveList.length}-for-${getList.length} — the side sending more players gets a bit more value back to make bundling worth it.`
       : "";
   return (
     `${teamName} is thin at ${giveList[0].position}: ${describePlayers(giveList)} would likely start${theirCurrent}. ` +
@@ -151,13 +226,15 @@ function buildReason({ teamName, giveList, getList, giveValue, getValue, theirNe
   );
 }
 
-function buildTradeAnalysis({ roster, otherTeams, rosterSlots, opponents, rankings, unitHealth, weeksHistory }) {
+function buildTradeAnalysis({ roster, otherTeams, freeAgents, rosterSlots, season, opponents, rankings, unitHealth, weeksHistory }) {
   const score = (p) => {
     const scored = scorePlayer(p, opponents, rankings, unitHealth, weeksHistory);
-    return { ...scored, tradeValue: seasonValue(scored) };
+    return { ...scored, tradeValue: seasonValue(scored, season) };
   };
 
-  const myScored = roster.map(score);
+  const replacementByPosition = computeReplacementLevels((freeAgents || []).map(score));
+
+  const myScored = attachFairnessValues(roster.map(score), replacementByPosition);
   const myBaseline = lineupTotal(myScored, rosterSlots);
   const myNeeds = computeTeamNeeds(myScored);
   const myNeedPositions = new Set(myNeeds.slice(0, NEEDIEST_POSITIONS_PER_TEAM).map((n) => n.position));
@@ -171,7 +248,7 @@ function buildTradeAnalysis({ roster, otherTeams, rosterSlots, opponents, rankin
   const bestPerTeam = [];
   for (const team of otherTeams || []) {
     if (!team.roster?.length) continue;
-    const theirScored = team.roster.map(score);
+    const theirScored = attachFairnessValues(team.roster.map(score), replacementByPosition);
     const theirNeeds = computeTeamNeeds(theirScored);
     const theirNeedPositions = new Set(theirNeeds.slice(0, NEEDIEST_POSITIONS_PER_TEAM).map((n) => n.position));
     const theirNeedByPosition = new Map(theirNeeds.map((n) => [n.position, n]));
