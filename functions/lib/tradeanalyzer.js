@@ -3,17 +3,20 @@
 // upgrade there, (b) fills MY weakest starting spot in return, and (c) trades
 // comparable season-long value both ways — so a bench-caliber player never
 // gets floated for a league-winning one just because it happens to help my
-// lineup this week. This is a snapshot signal for the current week's optimal
-// lineup, not a season-long dynasty trade calculator.
+// lineup this week. When a single-for-single swap doesn't clear the fairness
+// bar, a smaller "throw-in" piece is added to whichever side is light, same
+// as how real trades get balanced. This is a snapshot signal for the current
+// week's optimal lineup, not a season-long dynasty trade calculator.
 
 import { scorePlayer, buildOptimalLineup } from "./lineup.js";
 
 const TRADEABLE_POSITIONS = ["QB", "RB", "WR", "TE"];
 const TOP_TRADES_RETURNED = 5;
 const NEEDIEST_POSITIONS_PER_TEAM = 2; // how many of a team's weakest starting spots count as "needs"
-const MIN_UPGRADE_MARGIN = 20; // season-point margin a "give" must clear over their current starter to be worth offering
-const FAIRNESS_MIN_ABSOLUTE = 25; // season-point slack allowed even for small-value players
-const FAIRNESS_RELATIVE = 0.35; // ...or this fraction of the larger side's value, whichever is bigger
+const MIN_UPGRADE_MARGIN = 20; // season-point margin the anchor "give" must clear over their current starter
+const FAIRNESS_MIN_ABSOLUTE = 20; // season-point slack allowed even for small-value players
+const FAIRNESS_MAX_ABSOLUTE = 55; // ...but never more than this, regardless of how big the players are
+const FAIRNESS_RELATIVE = 0.2; // the base allowance: this fraction of the larger side's value
 
 function round1(n) {
   return Math.round(n * 10) / 10;
@@ -44,7 +47,8 @@ function seasonValue(p) {
 
 function isFairTrade(giveValue, getValue) {
   const base = Math.max(giveValue, getValue, 1);
-  return Math.abs(giveValue - getValue) <= Math.max(FAIRNESS_MIN_ABSOLUTE, base * FAIRNESS_RELATIVE);
+  const allowedGap = Math.min(FAIRNESS_MAX_ABSOLUTE, Math.max(FAIRNESS_MIN_ABSOLUTE, base * FAIRNESS_RELATIVE));
+  return Math.abs(giveValue - getValue) <= allowedGap;
 }
 
 // This week's optimal lineup, ranked by each starting position's weakest
@@ -59,6 +63,47 @@ function computeTeamNeeds(scoredRoster, rosterSlots) {
     return { position, weakestValue: weakestStarter.tradeValue, weakestStarter };
   });
   return needs.sort((a, b) => a.weakestValue - b.weakestValue);
+}
+
+// Smallest-gap filler from `pool` that brings `anchorValue` as close as
+// possible to `targetValue` — the "throw-in" that balances an otherwise
+// lopsided single-for-single swap, same as a real trade would.
+function bestThrowIn(pool, excludeIds, anchorValue, targetValue) {
+  let best = null;
+  for (const p of pool) {
+    if (excludeIds.has(p.id)) continue;
+    const gap = Math.abs(anchorValue + p.tradeValue - targetValue);
+    if (!best || gap < best.gap) best = { player: p, gap };
+  }
+  return best?.player || null;
+}
+
+// Tries the anchor pair as a straight 1-for-1 first; if that's not fair,
+// adds one throw-in from whichever side is short on value. Returns null if
+// no combination (with at most one throw-in) clears the fairness bar.
+function buildBalancedPackage({ giveAnchor, getAnchor, myPool, theirPool }) {
+  const anchorGive = giveAnchor.tradeValue;
+  const anchorGet = getAnchor.tradeValue;
+
+  if (isFairTrade(anchorGive, anchorGet)) {
+    return { giveList: [giveAnchor], getList: [getAnchor] };
+  }
+
+  if (anchorGive < anchorGet) {
+    // I'm light on value — sweeten my side with a smaller piece of mine.
+    const throwIn = bestThrowIn(myPool, new Set([giveAnchor.id]), anchorGive, anchorGet);
+    if (throwIn && isFairTrade(anchorGive + throwIn.tradeValue, anchorGet)) {
+      return { giveList: [giveAnchor, throwIn], getList: [getAnchor] };
+    }
+    return null;
+  }
+
+  // My anchor outweighs theirs — they sweeten their side instead.
+  const throwIn = bestThrowIn(theirPool, new Set([getAnchor.id]), anchorGet, anchorGive);
+  if (throwIn && isFairTrade(anchorGive, anchorGet + throwIn.tradeValue)) {
+    return { giveList: [giveAnchor], getList: [getAnchor, throwIn] };
+  }
+  return null;
 }
 
 function summarizeForTrade(p) {
@@ -76,16 +121,24 @@ function summarizeForTrade(p) {
   };
 }
 
-function buildReason({ teamName, give, get, giveValue, getValue, theirNeed, myDelta }) {
+function describePlayers(list) {
+  return list.map((p) => `${p.name} (${p.tradeValue} season pts)`).join(" + ");
+}
+
+function buildReason({ teamName, giveList, getList, giveValue, getValue, theirNeed, myDelta }) {
   const valueGap = Math.abs(giveValue - getValue);
   const valueNote =
-    valueGap <= 15 ? "comparable value" : giveValue > getValue ? "slightly favors you in value" : "slightly favors them in value";
+    valueGap <= 10 ? "comparable value" : giveValue > getValue ? "slightly favors you in value" : "slightly favors them in value";
   const theirCurrent = theirNeed.weakestStarter
     ? ` over ${theirNeed.weakestStarter.name} (${theirNeed.weakestValue} season pts)`
     : "";
+  const packageNote =
+    giveList.length > 1 || getList.length > 1
+      ? ` Structured as a ${giveList.length}-for-${getList.length} to balance value.`
+      : "";
   return (
-    `${teamName} is thin at ${give.position}: ${give.name} (${giveValue} season pts) would likely start${theirCurrent}. ` +
-    `${get.name} (${getValue} season pts) fills your need at ${get.position} and projects a +${myDelta} pt lineup gain this week — ${valueNote}.`
+    `${teamName} is thin at ${giveList[0].position}: ${describePlayers(giveList)} would likely start${theirCurrent}. ` +
+    `${describePlayers(getList)} fills your need at ${getList[0].position} and projects a +${myDelta} pt lineup gain this week — ${valueNote}.${packageNote}`
   );
 }
 
@@ -108,31 +161,34 @@ function buildTradeAnalysis({ roster, otherTeams, rosterSlots, opponents, rankin
     const theirNeeds = computeTeamNeeds(theirScored, rosterSlots);
     const theirNeedPositions = new Set(theirNeeds.slice(0, NEEDIEST_POSITIONS_PER_TEAM).map((n) => n.position));
     const theirNeedByPosition = new Map(theirNeeds.map((n) => [n.position, n]));
+    const theirCandidates = theirScored.filter((p) => TRADEABLE_POSITIONS.includes(p.position));
 
     let best = null;
-    for (const give of myCandidates) {
-      if (!theirNeedPositions.has(give.position)) continue; // not a position this team is actually looking to upgrade
-      const theirNeed = theirNeedByPosition.get(give.position);
-      const giveValue = give.tradeValue;
-      if (giveValue < theirNeed.weakestValue + MIN_UPGRADE_MARGIN) continue; // not a real upgrade for them
+    for (const giveAnchor of myCandidates) {
+      if (!theirNeedPositions.has(giveAnchor.position)) continue; // not a position this team is looking to upgrade
+      const theirNeed = theirNeedByPosition.get(giveAnchor.position);
+      if (giveAnchor.tradeValue < theirNeed.weakestValue + MIN_UPGRADE_MARGIN) continue; // not a real upgrade for them
 
-      const myRosterWithoutGive = myScored.filter((p) => p.id !== give.id);
+      for (const getAnchor of theirCandidates) {
+        if (!myNeedPositions.has(getAnchor.position)) continue; // only chase players at positions I actually need
 
-      for (const get of theirScored) {
-        if (!myNeedPositions.has(get.position)) continue; // only chase players at positions I actually need
-        const getValue = get.tradeValue;
-        if (!isFairTrade(giveValue, getValue)) continue;
+        const pkg = buildBalancedPackage({ giveAnchor, getAnchor, myPool: myCandidates, theirPool: theirCandidates });
+        if (!pkg) continue;
 
-        const myDelta = round1(lineupTotal([...myRosterWithoutGive, get], rosterSlots) - myBaseline);
+        const giveIds = new Set(pkg.giveList.map((p) => p.id));
+        const myRosterWithoutGives = myScored.filter((p) => !giveIds.has(p.id));
+        const myDelta = round1(lineupTotal([...myRosterWithoutGives, ...pkg.getList], rosterSlots) - myBaseline);
         if (myDelta <= 0) continue; // only surface trades that are actual upgrades for me
 
         if (!best || myDelta > best.myLineupDelta) {
+          const giveValue = round1(pkg.giveList.reduce((s, p) => s + p.tradeValue, 0));
+          const getValue = round1(pkg.getList.reduce((s, p) => s + p.tradeValue, 0));
           best = {
             team: team.teamName,
-            give: summarizeForTrade(give),
-            receive: summarizeForTrade(get),
+            give: pkg.giveList.map(summarizeForTrade),
+            receive: pkg.getList.map(summarizeForTrade),
             myLineupDelta: myDelta,
-            reason: buildReason({ teamName: team.teamName, give, get, giveValue, getValue, theirNeed, myDelta }),
+            reason: buildReason({ teamName: team.teamName, giveList: pkg.giveList, getList: pkg.getList, giveValue, getValue, theirNeed, myDelta }),
           };
         }
       }

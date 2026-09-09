@@ -129,8 +129,16 @@
     .trend-down { background: rgba(161, 89, 44, 0.14); color: var(--accent-2); }
     .trend-stable { background: rgba(110, 100, 85, 0.12); color: var(--text-dim); }
 
-    .trade-row .trade-swap { margin-bottom: 0.3rem; }
-    .trade-team { font-size: 0.78rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.4rem; }
+    .trade-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    .trade-direction { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; }
+    .trade-direction + .trade-direction { border-top: 1px dashed var(--border); }
+    .trade-side-label { font-size: 0.78rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.25rem; }
+    .trade-side { flex: 1; }
+    .trade-player { line-height: 1.4; }
+    .trade-player .value { color: var(--text-dim); font-size: 0.85rem; }
+    .trade-arrow { color: var(--text-dim); font-size: 1.2rem; flex-shrink: 0; }
+    .trade-destination { color: var(--text-dim); font-size: 0.9rem; flex-shrink: 0; text-align: right; max-width: 40%; }
+    .trade-reason { color: var(--text-dim); font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 0.6rem; padding-top: 0.6rem; }
   </style>
 </head>
 <body>
@@ -326,16 +334,34 @@
       return wrap;
     }
 
-    function renderTradeRow(t) {
-      const row = el("div", { class: "change-row trade-row" });
-      if (t.team) row.appendChild(el("div", { class: "trade-team", text: `Proposal to ${t.team}` }));
-      row.appendChild(el("div", { class: "trade-swap" }, [
-        el("strong", { text: `Give ${t.give.name}` }),
-        el("span", { class: "arrow", text: "for" }),
-        el("strong", { text: t.receive.name }),
-      ]));
-      row.appendChild(el("div", { class: "meta-row", text: t.reason }));
+    function renderTradePlayerList(players) {
+      const wrap = el("div", { class: "trade-players" });
+      for (const p of players) {
+        wrap.appendChild(el("div", { class: "trade-player" }, [
+          el("strong", { text: `${p.name} (${p.position})` }),
+          el("span", { class: "value", text: ` — ${p.seasonValue} season pts` }),
+        ]));
+      }
+      return wrap;
+    }
+
+    function renderTradeDirection(fromLabel, players, toLabel) {
+      const row = el("div", { class: "trade-direction" });
+      const side = el("div", { class: "trade-side" });
+      side.appendChild(el("div", { class: "trade-side-label", text: fromLabel }));
+      side.appendChild(renderTradePlayerList(players));
+      row.appendChild(side);
+      row.appendChild(el("span", { class: "trade-arrow", text: "→" }));
+      row.appendChild(el("div", { class: "trade-destination", text: toLabel }));
       return row;
+    }
+
+    function renderTradeRow(t) {
+      const card = el("div", { class: "trade-card" });
+      card.appendChild(renderTradeDirection("Your Team", t.give, t.team));
+      card.appendChild(renderTradeDirection(t.team, t.receive, "Your Team"));
+      card.appendChild(el("div", { class: "trade-reason", text: t.reason }));
+      return card;
     }
 
     function renderTradeAnalyzer(tradeAnalyzer) {
