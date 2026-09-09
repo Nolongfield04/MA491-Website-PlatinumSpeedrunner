@@ -1,14 +1,20 @@
 // Recommended trades: for each other team in the league, finds a trade that
-// (a) fills THEIR weakest starting spot with one of my players who's a real
-// upgrade there, (b) fills MY weakest starting spot in return, and (c) trades
-// comparable season-long value both ways — so a bench-caliber player never
-// gets floated for a league-winning one just because it happens to help my
-// lineup this week. When a single-for-single swap doesn't clear the fairness
-// bar, a smaller "throw-in" piece is added to whichever side is light, same
-// as how real trades get balanced. This is a snapshot signal for the current
-// week's optimal lineup, not a season-long dynasty trade calculator.
+// (a) fills a spot in THEIR actual current starting lineup with one of my
+// players who's a real upgrade there, (b) fills a spot in MY actual starting
+// lineup in return, and (c) trades comparable season-long value both ways —
+// so a bench-caliber player never gets floated for a league-winning one just
+// because it happens to help my lineup this week. Needs are read off each
+// team's real ESPN-set lineup (lineupSlotId), not a recomputed "optimal"
+// lineup for them — a trade target has to be someone THEY'D actually bench,
+// or it wouldn't move the needle for that manager at all. Prefers giving up
+// bench players of mine over anything in my own starting lineup, only
+// reaching into my starters if that's what it takes to make the trade fair.
+// When a single-for-single swap doesn't clear the fairness bar, a smaller
+// "throw-in" piece is added to whichever side is light, same as how real
+// trades get balanced. This is a snapshot signal for the current week's
+// optimal lineup, not a season-long dynasty trade calculator.
 
-import { scorePlayer, buildOptimalLineup } from "./lineup.js";
+import { scorePlayer, buildOptimalLineup, currentStarters } from "./lineup.js";
 
 const TRADEABLE_POSITIONS = ["QB", "RB", "WR", "TE"];
 const TOP_TRADES_RETURNED = 5;
@@ -51,15 +57,18 @@ function isFairTrade(giveValue, getValue) {
   return Math.abs(giveValue - getValue) <= allowedGap;
 }
 
-// This week's optimal lineup, ranked by each starting position's weakest
-// (lowest season-value) player — i.e. where this team would most want to
-// upgrade. Positions with no starter at all (thin bench) rank as maximal need.
-function computeTeamNeeds(scoredRoster, rosterSlots) {
-  const { lineup } = buildOptimalLineup(scoredRoster, rosterSlots);
+// Ranked by each ACTUAL starting position's weakest (lowest season-value)
+// player — i.e. where this team would most want to upgrade. Deliberately
+// reads the roster's real lineupSlotId-based starters, not a recomputed
+// "optimal" lineup for them: a trade only helps a team if it replaces
+// someone they're really starting. Positions with no current starter at all
+// rank as maximal need.
+function computeTeamNeeds(scoredRoster) {
+  const starters = currentStarters(scoredRoster);
   const needs = TRADEABLE_POSITIONS.map((position) => {
-    const starters = lineup.filter((l) => l.player?.position === position).map((l) => l.player);
-    if (!starters.length) return { position, weakestValue: 0, weakestStarter: null };
-    const weakestStarter = starters.reduce((min, p) => (p.tradeValue < min.tradeValue ? p : min));
+    const positionStarters = starters.filter((p) => p.position === position);
+    if (!positionStarters.length) return { position, weakestValue: 0, weakestStarter: null };
+    const weakestStarter = positionStarters.reduce((min, p) => (p.tradeValue < min.tradeValue ? p : min));
     return { position, weakestValue: weakestStarter.tradeValue, weakestStarter };
   });
   return needs.sort((a, b) => a.weakestValue - b.weakestValue);
@@ -150,15 +159,20 @@ function buildTradeAnalysis({ roster, otherTeams, rosterSlots, opponents, rankin
 
   const myScored = roster.map(score);
   const myBaseline = lineupTotal(myScored, rosterSlots);
-  const myNeeds = computeTeamNeeds(myScored, rosterSlots);
+  const myNeeds = computeTeamNeeds(myScored);
   const myNeedPositions = new Set(myNeeds.slice(0, NEEDIEST_POSITIONS_PER_TEAM).map((n) => n.position));
   const myCandidates = myScored.filter((p) => TRADEABLE_POSITIONS.includes(p.position));
+  const myStarterIds = new Set(currentStarters(myScored).map((p) => p.id));
+  const givesOnlyBench = (giveList) => giveList.every((p) => !myStarterIds.has(p.id));
+  // Bench-only packages always beat ones that touch my starting lineup,
+  // regardless of lineup delta; only compare delta within the same tier.
+  const isBetterCandidate = (a, b) => (a.benchOnly !== b.benchOnly ? a.benchOnly : a.myLineupDelta > b.myLineupDelta);
 
   const bestPerTeam = [];
   for (const team of otherTeams || []) {
     if (!team.roster?.length) continue;
     const theirScored = team.roster.map(score);
-    const theirNeeds = computeTeamNeeds(theirScored, rosterSlots);
+    const theirNeeds = computeTeamNeeds(theirScored);
     const theirNeedPositions = new Set(theirNeeds.slice(0, NEEDIEST_POSITIONS_PER_TEAM).map((n) => n.position));
     const theirNeedByPosition = new Map(theirNeeds.map((n) => [n.position, n]));
     const theirCandidates = theirScored.filter((p) => TRADEABLE_POSITIONS.includes(p.position));
@@ -180,14 +194,15 @@ function buildTradeAnalysis({ roster, otherTeams, rosterSlots, opponents, rankin
         const myDelta = round1(lineupTotal([...myRosterWithoutGives, ...pkg.getList], rosterSlots) - myBaseline);
         if (myDelta <= 0) continue; // only surface trades that are actual upgrades for me
 
-        if (!best || myDelta > best.myLineupDelta) {
+        const candidate = { myLineupDelta: myDelta, benchOnly: givesOnlyBench(pkg.giveList) };
+        if (!best || isBetterCandidate(candidate, best)) {
           const giveValue = round1(pkg.giveList.reduce((s, p) => s + p.tradeValue, 0));
           const getValue = round1(pkg.getList.reduce((s, p) => s + p.tradeValue, 0));
           best = {
+            ...candidate,
             team: team.teamName,
             give: pkg.giveList.map(summarizeForTrade),
             receive: pkg.getList.map(summarizeForTrade),
-            myLineupDelta: myDelta,
             reason: buildReason({ teamName: team.teamName, giveList: pkg.giveList, getList: pkg.getList, giveValue, getValue, theirNeed, myDelta }),
           };
         }

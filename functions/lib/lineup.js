@@ -532,4 +532,4 @@ function summarizePlayer(p) {
   };
 }
 
-export { buildAnalysis, scorePlayer, buildOptimalLineup, summarizePlayer };
+export { buildAnalysis, scorePlayer, buildOptimalLineup, currentStarters, summarizePlayer };

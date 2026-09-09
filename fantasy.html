@@ -99,6 +99,24 @@
       padding-left: 0.65rem;
     }
 
+    .collapsible-section { margin-bottom: 1.5rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .collapsible-section > summary {
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.9rem 1rem;
+      font-weight: 700;
+      font-size: 1.15rem;
+      border-left: 4px solid var(--accent-2);
+      background: var(--bg-alt);
+    }
+    .collapsible-section > summary::-webkit-details-marker { display: none; }
+    .collapsible-section > summary::before { content: "▸"; color: var(--text-dim); font-size: 0.9rem; transition: transform 0.15s; }
+    .collapsible-section[open] > summary::before { transform: rotate(90deg); }
+    .collapsible-section > .collapsible-body { padding: 1rem 1.1rem 0.25rem; }
+
     .scoreboard {
       display: inline-flex;
       align-items: center;
@@ -130,15 +148,13 @@
     .trend-stable { background: rgba(110, 100, 85, 0.12); color: var(--text-dim); }
 
     .trade-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
-    .trade-direction { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; }
-    .trade-direction + .trade-direction { border-top: 1px dashed var(--border); }
-    .trade-side-label { font-size: 0.78rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.25rem; }
-    .trade-side { flex: 1; }
+    .trade-parties { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .trade-side { flex: 1 1 220px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 0.9rem; }
+    .trade-side-label { font-size: 0.78rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.4rem; }
     .trade-player { line-height: 1.4; }
     .trade-player .value { color: var(--text-dim); font-size: 0.85rem; }
-    .trade-arrow { color: var(--text-dim); font-size: 1.2rem; flex-shrink: 0; }
-    .trade-destination { color: var(--text-dim); font-size: 0.9rem; flex-shrink: 0; text-align: right; max-width: 40%; }
-    .trade-reason { color: var(--text-dim); font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 0.6rem; padding-top: 0.6rem; }
+    .trade-to { color: var(--text-dim); font-size: 0.85rem; margin-top: 0.5rem; }
+    .trade-reason { color: var(--text-dim); font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 0.9rem; padding-top: 0.6rem; }
   </style>
 </head>
 <body>
@@ -192,6 +208,18 @@
       }
       if (children) for (const c of children) node.appendChild(c);
       return node;
+    }
+
+    // Secondary detail (full roster, weather, trends, ...) — collapsed by
+    // default so the page leads with what you actually act on each week.
+    function renderCollapsibleSection(title, description, contentEl) {
+      const details = el("details", { class: "collapsible-section" });
+      details.appendChild(el("summary", { text: title }));
+      const body = el("div", { class: "collapsible-body" });
+      if (description) body.appendChild(el("p", { class: "meta-row", text: description }));
+      body.appendChild(contentEl);
+      details.appendChild(body);
+      return details;
     }
 
     function playerCell(p) {
@@ -345,21 +373,20 @@
       return wrap;
     }
 
-    function renderTradeDirection(fromLabel, players, toLabel) {
-      const row = el("div", { class: "trade-direction" });
+    function renderTradeSide(fromLabel, players, toLabel) {
       const side = el("div", { class: "trade-side" });
       side.appendChild(el("div", { class: "trade-side-label", text: fromLabel }));
       side.appendChild(renderTradePlayerList(players));
-      row.appendChild(side);
-      row.appendChild(el("span", { class: "trade-arrow", text: "→" }));
-      row.appendChild(el("div", { class: "trade-destination", text: toLabel }));
-      return row;
+      side.appendChild(el("div", { class: "trade-to", text: `→ ${toLabel}` }));
+      return side;
     }
 
     function renderTradeRow(t) {
       const card = el("div", { class: "trade-card" });
-      card.appendChild(renderTradeDirection("Your Team", t.give, t.team));
-      card.appendChild(renderTradeDirection(t.team, t.receive, "Your Team"));
+      const parties = el("div", { class: "trade-parties" });
+      parties.appendChild(renderTradeSide("Your Team", t.give, t.team));
+      parties.appendChild(renderTradeSide(t.team, t.receive, "Your Team"));
+      card.appendChild(parties);
       card.appendChild(el("div", { class: "trade-reason", text: t.reason }));
       return card;
     }
@@ -529,8 +556,7 @@
         content.appendChild(el("h2", { text: "Key Takeaways" }));
         content.appendChild(renderTakeaways(data.keyTakeaways));
 
-        content.appendChild(el("h2", { text: "News" }));
-        content.appendChild(renderNews(data.news));
+        content.appendChild(renderCollapsibleSection("News", null, renderNews(data.news)));
 
         content.appendChild(el("h2", { text: "Recommended Starting Lineup" }));
         content.appendChild(renderStartingLineup(data.startingLineup));
@@ -545,21 +571,29 @@
         content.appendChild(el("p", { class: "meta-row", text: "One realistic proposal per opposing team: targets their weakest starting spot with a player of comparable season-long value, and fills one of your own needs in return." }));
         content.appendChild(renderTradeAnalyzer(data.tradeAnalyzer));
 
-        content.appendChild(el("h2", { text: "Full Roster" }));
-        content.appendChild(el("p", { class: "meta-row", text: "DVP column: raw rank / strength-of-schedule-adjusted rank (1 = most exploitable, higher = tougher)." }));
-        content.appendChild(renderRosterTable(data.fullRoster));
+        content.appendChild(renderCollapsibleSection(
+          "Full Roster",
+          "DVP column: raw rank / strength-of-schedule-adjusted rank (1 = most exploitable, higher = tougher).",
+          renderRosterTable(data.fullRoster)
+        ));
 
-        content.appendChild(el("h2", { text: "Weather" }));
-        content.appendChild(el("p", { class: "meta-row", text: "Outdoor-stadium games only — domes and retractable roofs carry no weather factor here." }));
-        content.appendChild(renderWeather(data.fullRoster));
+        content.appendChild(renderCollapsibleSection(
+          "Weather",
+          "Outdoor-stadium games only — domes and retractable roofs carry no weather factor here.",
+          renderWeather(data.fullRoster)
+        ));
 
-        content.appendChild(el("h2", { text: "Opportunity Trends" }));
-        content.appendChild(el("p", { class: "meta-row", text: "Workload, target share, snap share, and expected-vs-actual points (xFP) — recent trend vs. season average." }));
-        content.appendChild(renderOpportunityTrends(data.fullRoster));
+        content.appendChild(renderCollapsibleSection(
+          "Opportunity Trends",
+          "Workload, target share, snap share, and expected-vs-actual points (xFP) — recent trend vs. season average.",
+          renderOpportunityTrends(data.fullRoster)
+        ));
 
-        content.appendChild(el("h2", { text: "Player Trends" }));
-        content.appendChild(el("p", { class: "meta-row", text: "Projected vs. actual points by week, tracked as the season goes on." }));
-        content.appendChild(renderTrends(data.fullRoster));
+        content.appendChild(renderCollapsibleSection(
+          "Player Trends",
+          "Projected vs. actual points by week, tracked as the season goes on.",
+          renderTrends(data.fullRoster)
+        ));
 
         loading.hidden = true;
         content.hidden = false;
