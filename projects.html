@@ -95,6 +95,32 @@
     </div>
 
     <div class="card">
+      <span class="status done">Live</span>
+      <h3>Russian Losses vs. Propaganda Model</h3>
+      <p>Tests whether the volume and tone of Russian state-media war coverage has
+        explanatory power over Russia's monthly personnel losses in Ukraine. Pulls
+        war-coverage volume/tone from major Moscow outlets (GDELT), Vladimir Putin's
+        public-appearance schedule (Kremlin.ru, via Wayback Machine archives, since
+        the live site blocks this network), and self-scored sentiment on posts from
+        several widely-cited Russian war-correspondent Telegram channels. Each month
+        is estimated by a regression trained only on prior months, then refit once
+        that month's actual figures are in &mdash; the explanatory variables (capped
+        at 4) are chosen automatically by genuine out-of-sample walk-forward
+        accuracy across the whole series, not by hindsight fit. Self-hosted on the
+        same Raspberry Pi as the weather station and fantasy football optimizer.</p>
+      <a href="https://math-pi-5.tailcd9c3b.ts.net/russia-losses" class="btn" target="_blank" rel="noopener">Russian Losses Model</a>
+      <div class="tag-list">
+        <span class="tag">Python</span>
+        <span class="tag">Flask</span>
+        <span class="tag">Raspberry Pi</span>
+        <span class="tag">GDELT API</span>
+        <span class="tag">Web Scraping</span>
+        <span class="tag">NLP/Sentiment</span>
+        <span class="tag">Statistical Modeling</span>
+      </div>
+    </div>
+
+    <div class="card">
       <span class="status planned">Planned</span>
       <h3>Automated Deficiency Report Tracker</h3>
       <p>A tool for my company's administrative workflow: platoon leaders and
