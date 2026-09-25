@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>platinumspeedrunner &mdash; Biography</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header>
+    <nav>
+      <a class="site-title" href="index.html">platinumspeedrunner</a>
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="biography.html" class="active" aria-current="page">Biography</a></li>
+        <li><a href="resume.html">Resume</a></li>
+        <li><a href="projects.html">Math Projects</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+    <div class="hero">
+      <img src="images/portrait.jpg" alt="Portrait at Mont Saint-Michel, France" class="hero-photo" />
+      <div>
+        <h1>Biography</h1>
+        <p class="subtitle">21 &middot; Cadet, United States Military Academy at West Point &middot; Applied Statistics &amp; Data Science</p>
+      </div>
+    </div>
+
+    <p>
+      I'm a 21-year-old cadet at West Point studying applied statistics and
+      data science, with a minor in French. When I'm not buried in a problem
+      set, I'm usually outside — bowhunting whitetail from a treestand at
+      first light, chasing powder on skis, paddling out for a surf session,
+      or dropping below the surface on a scuba dive. There's a similar kind
+      of patience and attention to detail in both worlds: reading a ridgeline
+      for sign isn't so different from reading a proof for the step you
+      missed.
+    </p>
+
+    <h2>Interests</h2>
+    <ul class="plain">
+      <li>Hunting &mdash; bowhunting and rifle, mostly whitetail</li>
+      <li>Skiing</li>
+      <li>Surfing</li>
+      <li>Scuba diving</li>
+      <li>Mathematics &mdash; see my <a href="projects.html">Math Projects</a> page</li>
+    </ul>
+
+    <h2>Gallery</h2>
+    <div class="gallery">
+      <figure class="gallery-item">
+        <img src="images/b3d6153b-3735-4d11-9a55-f376130ffda9.jpg" alt="Hunting in the field" loading="lazy" />
+        <figcaption>Hunting</figcaption>
+      </figure>
+      <figure class="gallery-item">
+        <img src="images/IMG_2409.jpg" alt="On the slopes skiing" loading="lazy" />
+        <figcaption>Skiing</figcaption>
+      </figure>
+      <figure class="gallery-item">
+        <img src="images/thumbnail_GOPR3731.jpg" alt="On a scuba dive boat" loading="lazy" />
+        <figcaption>Scuba diving</figcaption>
+      </figure>
+      <figure class="gallery-item">
+        <img src="images/9f84be3b-537f-4b3b-83a6-f200cf0455f8.jpg" alt="Promotion Andre event at West Point" loading="lazy" />
+        <figcaption>West Point &mdash; Promotion Andre</figcaption>
+      </figure>
+    </div>
+
+    <h2>Contact</h2>
+    <ul class="plain">
+      <li><a href="https://www.linkedin.com/in/noah-longfield-414492245/" target="_blank" rel="noopener">LinkedIn</a></li>
+      <li><a href="https://github.com/Nolongfield04" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+
+    <nav class="page-nav" aria-label="Page navigation">
+      <a href="index.html"><span class="page-nav-label">&larr; Back</span>Home</a>
+      <a href="resume.html" class="next"><span class="page-nav-label">Next &rarr;</span>Resume</a>
+    </nav>
+  </main>
+
+  <footer>
+    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Cloudflare.
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

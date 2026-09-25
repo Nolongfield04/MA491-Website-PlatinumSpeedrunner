@@ -3,78 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>platinumspeedrunner &mdash; About</title>
+  <title>Noah Longfield &mdash; platinumspeedrunner</title>
+  <meta name="description" content="Noah Longfield — West Point cadet studying applied statistics and data science. Biography, resume, and math projects." />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <header>
     <nav>
       <a class="site-title" href="index.html">platinumspeedrunner</a>
       <ul class="nav-links">
-        <li><a href="index.html" class="active">About</a></li>
+        <li><a href="index.html" class="active" aria-current="page">Home</a></li>
+        <li><a href="biography.html">Biography</a></li>
         <li><a href="resume.html">Resume</a></li>
         <li><a href="projects.html">Math Projects</a></li>
       </ul>
     </nav>
   </header>
 
-  <main>
-    <div class="hero">
-      <img src="images/mont-saint-michel.png" alt="Portrait at Mont Saint-Michel, France" class="hero-photo" />
-      <div>
-        <h1>About Me</h1>
-        <p class="subtitle">21 &middot; Cadet, United States Military Academy at West Point &middot; Mathematics</p>
+  <main id="main" class="wide">
+    <section class="cover">
+      <img src="images/portrait.jpg" alt="Noah Longfield at Mont Saint-Michel, France" class="cover-photo" width="600" height="800" />
+      <div class="cover-text">
+        <p class="eyebrow">Cadet &middot; West Point, Class of 2027</p>
+        <h1>Noah Longfield</h1>
+        <p class="cover-lede">
+          I study applied statistics and data science at the United States
+          Military Academy, with a minor in French. I like building things
+          that turn messy real-world data into a clear answer &mdash; and
+          when I'm not doing that, I'm usually outside hunting, skiing,
+          surfing, or diving.
+        </p>
+        <ul class="facts">
+          <li>Dean's List, 6 semesters</li>
+          <li>French &middot; STANAG Level 3</li>
+          <li>Air Assault qualified</li>
+          <li>Semester at Saint-Cyr, France</li>
+        </ul>
+        <div class="cover-actions">
+          <a href="projects.html" class="btn">See my projects</a>
+          <a href="resume.html" class="btn btn-outline">View resume</a>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <p>
-      I'm a 21-year-old cadet at West Point studying mathematics. When I'm not
-      buried in a problem set, I'm usually outside — bowhunting whitetail from
-      a treestand at first light, chasing powder on skis, paddling out for a
-      surf session, or dropping below the surface on a scuba dive. There's a
-      similar kind of patience and attention to detail in both worlds: reading
-      a ridgeline for sign isn't so different from reading a proof for the step
-      you missed.
-    </p>
-
-    <h2>Interests</h2>
-    <ul class="plain">
-      <li>Hunting &mdash; bowhunting and rifle, mostly whitetail</li>
-      <li>Skiing</li>
-      <li>Surfing</li>
-      <li>Scuba diving</li>
-      <li>Mathematics &mdash; see my <a href="projects.html">Math Projects</a> page</li>
-    </ul>
-
-    <h2>Gallery</h2>
-    <div class="gallery">
-      <figure class="gallery-item">
-        <img src="images/b3d6153b-3735-4d11-9a55-f376130ffda9.jpg" alt="Hunting in the field" />
-        <figcaption>Hunting</figcaption>
-      </figure>
-      <figure class="gallery-item">
-        <img src="images/IMG_2409.jpg" alt="On the slopes skiing" />
-        <figcaption>Skiing</figcaption>
-      </figure>
-      <figure class="gallery-item">
-        <img src="images/thumbnail_GOPR3731.jpg" alt="On a scuba dive boat" />
-        <figcaption>Scuba diving</figcaption>
-      </figure>
-      <figure class="gallery-item">
-        <img src="images/9f84be3b-537f-4b3b-83a6-f200cf0455f8.jpg" alt="Promotion Andre event at West Point" />
-        <figcaption>West Point &mdash; Promotion Andre</figcaption>
-      </figure>
-    </div>
-
-    <h2>Contact</h2>
-    <ul class="plain">
-      <li><a href="https://www.linkedin.com/in/noah-longfield-414492245/" target="_blank" rel="noopener">LinkedIn</a></li>
-      <li><a href="https://github.com/Nolongfield04" target="_blank" rel="noopener">GitHub</a></li>
-    </ul>
+    <section aria-labelledby="explore-heading">
+      <h2 id="explore-heading" class="section-heading">Explore the site</h2>
+      <div class="section-cards">
+        <a class="section-card" href="biography.html">
+          <span class="section-num">01</span>
+          <h3>Biography</h3>
+          <p>Who I am outside the classroom: West Point, time abroad in France, and the outdoors.</p>
+          <span class="section-go">Read my story <span aria-hidden="true">&rarr;</span></span>
+        </a>
+        <a class="section-card" href="resume.html">
+          <span class="section-num">02</span>
+          <h3>Resume</h3>
+          <p>Education, leadership roles, awards, and technical and language skills.</p>
+          <span class="section-go">View resume <span aria-hidden="true">&rarr;</span></span>
+        </a>
+        <a class="section-card" href="projects.html">
+          <span class="section-num">03</span>
+          <h3>Math Projects</h3>
+          <p>Four live data projects running on my own Raspberry Pi, plus my MA491 coursework.</p>
+          <span class="section-go">Browse projects <span aria-hidden="true">&rarr;</span></span>
+        </a>
+      </div>
+    </section>
   </main>
 
   <footer>
-    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Cloudflare Pages.
+    <div class="footer-links">
+      <a href="https://www.linkedin.com/in/noah-longfield-414492245/" target="_blank" rel="noopener">LinkedIn</a>
+      <a href="https://github.com/Nolongfield04" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Cloudflare.
   </footer>
 
   <script>

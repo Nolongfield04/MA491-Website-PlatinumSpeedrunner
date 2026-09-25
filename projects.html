@@ -7,18 +7,20 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <header>
     <nav>
       <a class="site-title" href="index.html">platinumspeedrunner</a>
       <ul class="nav-links">
-        <li><a href="index.html">About</a></li>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="biography.html">Biography</a></li>
         <li><a href="resume.html">Resume</a></li>
-        <li><a href="projects.html" class="active">Math Projects</a></li>
+        <li><a href="projects.html" class="active" aria-current="page">Math Projects</a></li>
       </ul>
     </nav>
   </header>
 
-  <main>
+  <main id="main">
     <h1>Math Projects</h1>
     <p class="subtitle">Projects I'm working on or planning to explore.</p>
     <p><a href="MA491/index.html">Browse MA491 coursework &rarr;</a></p>
@@ -137,10 +139,15 @@
         <span class="tag">Data Entry</span>
       </div>
     </div>
+
+    <nav class="page-nav" aria-label="Page navigation">
+      <a href="resume.html"><span class="page-nav-label">&larr; Back</span>Resume</a>
+      <a href="index.html" class="next"><span class="page-nav-label">Return &rarr;</span>Home</a>
+    </nav>
   </main>
 
   <footer>
-    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Cloudflare Pages.
+    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Cloudflare.
   </footer>
 
   <script>

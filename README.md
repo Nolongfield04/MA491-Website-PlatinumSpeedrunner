@@ -1,6 +1,6 @@
 # platinumspeedrunner.dev
 
-Personal website — About, Resume, and Math Projects. Plain HTML/CSS/JS, no
+Personal website — cover page, Biography, Resume, and Math Projects. Plain HTML/CSS/JS, no
 build step. Deployed via Cloudflare Pages from this GitHub repo.
 
 The Math Projects page links out to a few tools that are self-hosted on a
@@ -10,7 +10,8 @@ from a Cloudflare Pages Function; see below).
 
 ## Structure
 
-- `index.html` — About page
+- `index.html` — Cover page (portrait, short intro, links to each section)
+- `biography.html` — Biography: story, interests, gallery, contact
 - `resume.html` — Resume / accomplishments
 - `projects.html` — Math projects, including links to the Pi-hosted tools
 - `style.css` — shared styles

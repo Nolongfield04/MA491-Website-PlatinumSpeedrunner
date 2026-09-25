@@ -7,20 +7,21 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <header>
     <nav>
       <a class="site-title" href="index.html">platinumspeedrunner</a>
       <ul class="nav-links">
-        <li><a href="index.html">About</a></li>
-        <li><a href="resume.html" class="active">Resume</a></li>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="biography.html">Biography</a></li>
+        <li><a href="resume.html" class="active" aria-current="page">Resume</a></li>
         <li><a href="projects.html">Math Projects</a></li>
       </ul>
     </nav>
   </header>
 
-  <main>
+  <main id="main">
     <h1>Resume</h1>
-    <p class="subtitle placeholder">[Optional: link to a downloadable PDF version of your resume here.]</p>
 
     <h2>Education</h2>
     <div class="card">
@@ -65,10 +66,15 @@
       <span class="tag">Python &middot; 3 yrs</span>
       <span class="tag">RStudio &middot; 3 yrs</span>
     </div>
+
+    <nav class="page-nav" aria-label="Page navigation">
+      <a href="biography.html"><span class="page-nav-label">&larr; Back</span>Biography</a>
+      <a href="projects.html" class="next"><span class="page-nav-label">Next &rarr;</span>Math Projects</a>
+    </nav>
   </main>
 
   <footer>
-    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Cloudflare Pages.
+    &copy; <span id="year"></span> platinumspeedrunner. Built with plain HTML/CSS, deployed via Cloudflare.
   </footer>
 
   <script>
