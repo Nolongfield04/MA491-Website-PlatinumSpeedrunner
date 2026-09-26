@@ -123,6 +123,33 @@
     </div>
 
     <div class="card">
+      <span class="status in-progress">In Progress</span>
+      <h3>Company Store Loss Monitor</h3>
+      <p>Cuts unpaid-for product at an honor-system company store by matching
+        motion-camera visits against the store's Venmo payments. Each week the
+        reviewer uploads the Venmo statement (only time, amount, payer and note are
+        kept, never bank details); the site then pulls that week's Ring camera
+        recordings, finds people with YOLO, crops around their hands with a pose
+        model, and identifies items with CLIP &mdash; drinks by container shape
+        (tall or slim can = energy drink, standard can = soda) rather than flavor.
+        Visits with no payment, or less than the estimated item total, go to a
+        password-protected review page, alongside the nearest payments before and after for context.
+        Only confident sightings count toward a flag, and every reviewer correction
+        becomes a reference photo so recognition learns the store's own camera.
+        Self-hosted on the same Raspberry Pi as the other projects.</p>
+      <a href="https://math-pi-5.tailcd9c3b.ts.net/store/" class="btn" target="_blank" rel="noopener">Store Review (login required)</a>
+      <div class="tag-list">
+        <span class="tag">Python</span>
+        <span class="tag">Flask</span>
+        <span class="tag">Raspberry Pi</span>
+        <span class="tag">Computer Vision</span>
+        <span class="tag">YOLO</span>
+        <span class="tag">CLIP</span>
+        <span class="tag">Ring API</span>
+      </div>
+    </div>
+
+    <div class="card">
       <span class="status planned">Planned</span>
       <h3>Automated Deficiency Report Tracker</h3>
       <p>A tool for my company's administrative workflow: platoon leaders and
